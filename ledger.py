@@ -12,9 +12,13 @@ class NotFound(LedgerError):          status, code = 404, "not_found"
 class IdempotencyConflict(LedgerError): status, code = 409, "idempotency_key_reused_with_different_request"
 class InsufficientFunds(LedgerError): status, code = 422, "insufficient_funds"
 
+MAX_AMOUNT = 10**12   # minor units; stops overflow and absurd requests
+ROLES = ("admin", "holder", "auditor")
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users(
-  id TEXT PRIMARY KEY, token_hash TEXT UNIQUE NOT NULL);
+  id TEXT PRIMARY KEY, token_hash TEXT UNIQUE NOT NULL,
+  role TEXT NOT NULL DEFAULT 'holder' CHECK (role IN ('admin','holder','auditor')));
 CREATE TABLE IF NOT EXISTS accounts(
   id TEXT PRIMARY KEY,
   owner_id TEXT REFERENCES users(id),          -- NULL for system accounts
@@ -70,13 +74,36 @@ class Ledger:
         c.execute("PRAGMA journal_mode=WAL")
         return c
 
-    # ---------- identity ----------
-    def create_user(self):
-        uid, token = _id(), secrets.token_urlsafe(32)
+    # ---------- identity & roles ----------
+    def _role(self, c, user_id):
+        r = c.execute("SELECT role FROM users WHERE id=?", (user_id,)).fetchone()
+        if not r: raise Unauthenticated("unknown user")
+        return r["role"]
+
+    def create_user(self, role="holder", token=None):
+        if role not in ROLES: raise ValidationError("role must be admin, holder or auditor")
+        uid, token = _id(), token or secrets.token_urlsafe(32)
         c = self._conn()
-        c.execute("INSERT INTO users VALUES(?,?)", (uid, _h(token)))
-        c.close()
-        return {"user_id": uid, "token": token}   # token shown once; only hash stored
+        try:
+            c.execute("INSERT INTO users(id,token_hash,role) VALUES(?,?,?)", (uid, _h(token), role))
+        finally: c.close()
+        return {"user_id": uid, "role": role, "token": token}   # token shown once; only hash stored
+
+    def admin_create_user(self, actor_id, role):
+        """Only an administrator can create admin/auditor users (public signup is holder-only)."""
+        c = self._conn()
+        try:
+            if self._role(c, actor_id) != "admin": raise Forbidden("administrators only")
+        finally: c.close()
+        return self.create_user(role)
+
+    def ensure_user(self, token, role):
+        """Bootstrap helper: create the user for this token if it does not exist yet."""
+        c = self._conn()
+        try:
+            r = c.execute("SELECT id FROM users WHERE token_hash=?", (_h(token),)).fetchone()
+        finally: c.close()
+        return r["id"] if r else self.create_user(role, token)["user_id"]
 
     def authenticate(self, token):
         if not token: raise Unauthenticated("missing token")
@@ -91,10 +118,28 @@ class Ledger:
             raise ValidationError("currency must be a 3-letter code")
         aid = _id()
         c = self._conn()
-        c.execute("INSERT INTO accounts(id,owner_id,currency) VALUES(?,?,?)",
-                  (aid, user_id, currency.upper()))
-        c.close()
+        try:
+            if self._role(c, user_id) == "auditor": raise Forbidden("auditors are read-only")
+            c.execute("INSERT INTO accounts(id,owner_id,currency) VALUES(?,?,?)",
+                      (aid, user_id, currency.upper()))
+        finally: c.close()
         return {"account_id": aid, "currency": currency.upper(), "balance": 0}
+
+    def seed_demo(self, admin_id):
+        """Demo data: two holders, one auditor, funded accounts. Idempotent. Only used if SEED_DEMO=1."""
+        out = {}
+        for name, bal in (("alice", 100000), ("bob", 5000)):
+            uid = self.ensure_user(f"demo-{name}-token", "holder")
+            c = self._conn()
+            try:
+                r = c.execute("SELECT id FROM accounts WHERE owner_id=? ORDER BY rowid LIMIT 1", (uid,)).fetchone()
+            finally: c.close()
+            aid = r["id"] if r else self.create_account(uid, "USD")["account_id"]
+            self.deposit(admin_id, f"seed-{name}", aid, bal)
+            out[name] = {"token": f"demo-{name}-token", "account_id": aid}
+        self.ensure_user("demo-auditor-token", "auditor")
+        out["auditor"] = {"token": "demo-auditor-token"}
+        return out
 
     # ---------- money movement ----------
     def deposit(self, user_id, idem_key, account_id, amount):
@@ -116,6 +161,7 @@ class Ledger:
                 raise ValidationError("Idempotency-Key header required (1-128 chars)")
             if not isinstance(amount, int) or isinstance(amount, bool) or amount <= 0:
                 raise ValidationError("amount must be a positive integer (minor units)")
+            if amount > MAX_AMOUNT: raise ValidationError("amount exceeds maximum")
             req_hash = _h(json.dumps([kind, src, dst, amount]))
             return self._post_tx(user_id, idem_key, kind, src, dst, amount, req_hash)
         except LedgerError as e:
@@ -126,6 +172,10 @@ class Ledger:
         c = self._conn()
         try:
             c.execute("BEGIN IMMEDIATE")           # serialises writers: no race between check and update
+            role = self._role(c, user_id)
+            if role == "auditor": raise Forbidden("auditors are read-only")
+            if kind == "deposit" and role != "admin":
+                raise Forbidden("only administrators can fund accounts")
             prev = c.execute("SELECT request_hash,response FROM transactions "
                              "WHERE user_id=? AND idem_key=?", (user_id, idem_key)).fetchone()
             if prev:
@@ -146,10 +196,9 @@ class Ledger:
                 if src == dst: raise ValidationError("source and destination must differ")
                 s, d = load(src), load(dst)
 
-            # authorisation: caller must own the customer account that is being debited
-            # (or credited, for deposits). Existence is checked first so ownership isn't leaked.
-            owner_acct = d if kind == "deposit" else s
-            if owner_acct["owner_id"] != user_id:
+            # authorisation: whoever debits must own the account being debited (admins fund
+            # accounts via deposits but can never move a customer's money out).
+            if kind != "deposit" and s["owner_id"] != user_id:
                 raise Forbidden("you do not own this account")
             if s["currency"] != d["currency"]:
                 raise ValidationError("currency mismatch")
@@ -188,30 +237,62 @@ class Ledger:
             c.close()
 
     # ---------- reads ----------
-    def _owned(self, c, user_id, account_id):
+    def _viewable(self, c, user_id, account_id):
+        """Holders see only their own accounts; auditors and admins may read any (read-only)."""
+        role = self._role(c, user_id)
         a = c.execute("SELECT * FROM accounts WHERE id=?", (account_id,)).fetchone()
         if not a: raise NotFound("account not found")
-        if a["owner_id"] != user_id: raise Forbidden("you do not own this account")
+        if role == "holder" and a["owner_id"] != user_id: raise Forbidden("you do not own this account")
         return a
 
     def get_account(self, user_id, account_id):
         c = self._conn()
         try:
-            a = self._owned(c, user_id, account_id)
+            a = self._viewable(c, user_id, account_id)
             return {"account_id": a["id"], "currency": a["currency"], "balance": a["balance"]}
+        finally: c.close()
+
+    def list_accounts(self, user_id):
+        c = self._conn()
+        try:
+            if self._role(c, user_id) == "holder":
+                rows = c.execute("SELECT id,currency,balance FROM accounts WHERE owner_id=?", (user_id,))
+            else:
+                rows = c.execute("SELECT id,currency,balance FROM accounts WHERE is_system=0")
+            return [{"account_id": r["id"], "currency": r["currency"], "balance": r["balance"]} for r in rows]
         finally: c.close()
 
     def statement(self, user_id, account_id):
         c = self._conn()
         try:
-            self._owned(c, user_id, account_id)
+            self._viewable(c, user_id, account_id)
             rows = c.execute("SELECT e.id,e.txn_id,t.kind,e.amount,e.created_at FROM entries e "
                              "JOIN transactions t ON t.id=e.txn_id WHERE e.account_id=? ORDER BY e.id",
                              (account_id,)).fetchall()
             return [dict(r) for r in rows]
         finally: c.close()
 
-    def reconcile(self):
+    def _oversight(self, c, user_id):
+        if self._role(c, user_id) not in ("admin", "auditor"):
+            raise Forbidden("auditors and administrators only")
+
+    def audit_entries(self, user_id, limit=100):
+        c = self._conn()
+        try:
+            self._oversight(c, user_id)
+            limit = max(1, min(int(limit), 500))
+            rows = c.execute("SELECT id,ts,user_id,action,idem_key,detail,outcome FROM audit_log "
+                             "ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+            return [dict(r) for r in rows]
+        finally: c.close()
+
+    def reconcile(self, user_id):
+        c = self._conn()
+        try: self._oversight(c, user_id)
+        finally: c.close()
+        return self._reconcile()
+
+    def _reconcile(self):
         """Prove the books: every txn nets to zero, and every cached balance equals its entries."""
         c = self._conn(); problems = []
         try:

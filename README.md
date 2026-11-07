@@ -1,53 +1,48 @@
 # LedgerLine: money movement with a ledger you can prove
 
-A small payments backend (Python 3 stdlib + SQLite, zero dependencies) where every transaction is
-**accurate, authorised, traceable and recorded in a reliable ledger**.
+Python 3 standard library + SQLite. No dependencies. **Live URL:** `<add after deploying>`
+See `THREATS.md` (threat model + tests), `PROMPTS.md` and `AI_USAGE.md` (AI use).
 
-## Run
+## Run locally
 ```
-python test_ledgerline.py        # 12 tests incl. concurrency
-python server.py                 # API on :8000  (ADMIN_KEY env for /reconcile, default "admin")
+python3 test_ledgerline.py                                   # 21 tests incl. concurrency
+ADMIN_TOKEN=<16+ chars> SEED_DEMO=1 python3 server.py        # API on :8000
+ADMIN_TOKEN=<same> python3 demo.py                           # guided demo (second terminal)
 ```
+Env vars: `ADMIN_TOKEN` (min 16 chars; creates the administrator, no default), `SEED_DEMO=1` (optional demo data), `PORT`, `LEDGER_DB`.
 
-## API
-| Method | Path | Notes |
+## Roles
+| Role | Can | Cannot |
 |---|---|---|
-| POST | /users | returns `user_id` + bearer `token` (shown once, only its hash is stored) |
-| POST | /accounts | `{"currency":"USD"}` |
-| POST | /deposits | `{"account_id","amount"}` + `Idempotency-Key` header |
-| POST | /withdrawals | `{"account_id","amount"}` + `Idempotency-Key` |
-| POST | /transfers | `{"from","to","amount"}` + `Idempotency-Key` |
-| GET | /accounts/{id} , /accounts/{id}/entries | owner only (balance / statement) |
-| GET | /reconcile | admin: proves the books balance |
+| **holder** (public signup `POST /users`) | open accounts; withdraw/transfer from **own** accounts; read own balance and statement | fund accounts, see others' accounts, audit log |
+| **admin** (from `ADMIN_TOKEN`) | fund accounts (deposits), create auditors/admins, read everything, reconcile | withdraw or transfer a customer's money |
+| **auditor** (created by admin) | read every account, statement, audit log, reconcile | any write |
 
-Amounts are **integers in minor units** (cents). Floats are rejected, so there is no rounding error.
+Seed data (only if `SEED_DEMO=1`): tokens `demo-alice-token` (holder, $1000.00), `demo-bob-token` (holder, $50.00), `demo-auditor-token`. These are public demo tokens, so never enable seeding on a real system.
 
-Example:
-```
-curl -XPOST localhost:8000/users                         # -> token
-curl -XPOST localhost:8000/accounts -H "Authorization: Bearer $T" -d '{"currency":"USD"}'
-curl -XPOST localhost:8000/deposits -H "Authorization: Bearer $T" -H "Idempotency-Key: dep-001" \
-     -d '{"account_id":"<id>","amount":10000}'            # run twice: second reply has "replayed":true
-```
-
-## How each problem is solved
-| Risk | Defence | Where |
+## API (Bearer token auth; amounts are integers in minor units, e.g. cents)
+| Method | Path | Who |
 |---|---|---|
-| **Duplicate requests** | Mandatory `Idempotency-Key`, scoped per user, stored with a hash of the request. Same key + same request returns the original result (`replayed:true`); same key + different request returns 409. `UNIQUE(user_id, idem_key)` backs it at DB level. | `_post_tx`, schema |
-| **Simultaneous withdrawals** | Each transfer runs in one `BEGIN IMMEDIATE` transaction (writers serialised) and debits with an atomic conditional `UPDATE ... WHERE balance >= amount`. A `CHECK(balance>=0)` is the last line of defence. 15 threads withdrawing the full balance, so exactly 1 succeeds. | `_post_tx` |
-| **Unauthorised transactions** | Bearer token to user; caller must own the debited account (or the credited one for deposits). Ownership checked on reads too. Currency mismatch, self-transfer and bad amounts rejected. | `_post_tx`, `_owned` |
-| **Incorrect balances** | Double-entry: every transaction writes two signed entries summing to zero; money enters/leaves only via per-currency system accounts. Cached `balance` updated in the same DB transaction as the entries. `reconcile()` re-derives every balance from entries and checks the global sum is 0, so tampering is detected. | `reconcile` |
-| **Traceability** | `entries` and `transactions` and `audit_log` are append-only (DB triggers abort UPDATE/DELETE). Audit log records successes and *rejected* attempts (who, what, key, why). Statements list every entry. | schema, `_audit` |
-| **Partial failure** | All-or-nothing: any error rolls back debit, credit, entries and idempotency record together. Failed requests are not cached, so clients can safely retry. | `_post_tx` |
+| POST | /users | anyone (creates a holder; token returned once) |
+| POST | /admin/users `{"role":"auditor"}` | admin |
+| POST | /accounts `{"currency":"USD"}` | holder/admin |
+| GET | /accounts | own accounts (holder) or all (admin/auditor) |
+| GET | /accounts/{id}, /accounts/{id}/entries | owner, admin, auditor |
+| POST | /deposits `{"account_id","amount"}` | admin |
+| POST | /withdrawals `{"account_id","amount"}` | account owner |
+| POST | /transfers `{"from","to","amount"}` | owner of `from` |
+| GET | /audit?limit=N | admin/auditor |
+| GET | /reconcile | admin/auditor |
 
-## Design decisions & trade-offs
-- **SQLite for portability.** Its single-writer lock gives serialisation for free. On PostgreSQL the same
-  guarantees come from `SELECT ... FOR UPDATE` on both accounts **locked in sorted id order** (avoids
-  deadlocks) at `READ COMMITTED`, or `SERIALIZABLE` with retry. The schema and logic carry over unchanged.
-- **Cached balance + entries** (rather than only SUM) for O(1) reads, with reconciliation as the proof.
-- **No reversals yet:** corrections would be new compensating transactions, never edits.
+POST money endpoints **require** an `Idempotency-Key` header. Errors: 400 validation, 401 auth, 403 forbidden, 404, 409 key reuse, 422 insufficient funds.
 
-## Known limitations / future work
-Token auth is demo-grade (add expiry/rotation, TLS, rate limiting); no pagination; idempotency records never
-expire (add TTL); audit-log hash chaining would make tampering by a DB admin evident; reversals/refunds,
-multi-currency FX, and metrics are not implemented.
+## How it works
+- **Double-entry:** every transaction writes two signed entries that sum to zero. Money enters or leaves only via a per-currency system account. Cached balances are updated in the same DB transaction.
+- **No overdraft:** atomic `UPDATE ... WHERE balance >= amount`, plus a `CHECK (balance >= 0)` constraint.
+- **Idempotency:** key + request hash stored per user, with `UNIQUE(user_id, idem_key)`. Same request replays the stored result; a different request under the same key gives 409.
+- **Concurrency:** each money movement is one `BEGIN IMMEDIATE` transaction (writers serialised). On PostgreSQL this would be `SELECT ... FOR UPDATE` on both accounts in sorted-id order.
+- **Audit trail:** `entries`, `transactions` and `audit_log` are append-only (DB triggers reject UPDATE/DELETE). Rejected attempts are logged too.
+- **Proof:** `/reconcile` recomputes every balance from entries and checks that every transaction and the whole ledger sum to zero.
+
+## Limitations (honest list)
+No web dashboard (API only). Tokens do not expire and there is no rate limiting. SQLite single node; free hosting resets the database on restart. No reversals, pagination, or multi-currency FX. Audit log has no hash chain.
