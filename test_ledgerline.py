@@ -126,6 +126,10 @@ class T(unittest.TestCase):
     def test_holder_lists_only_own_accounts(self):
         self.assertEqual([x["account_id"] for x in self.L.list_accounts(self.alice)], [self.a])
 
+    def test_whoami_reports_role(self):
+        self.assertEqual(self.L.whoami(self.auditor)["role"], "auditor")
+        self.assertEqual(self.L.whoami(self.alice)["role"], "holder")
+
     def test_bad_token_and_unknown_role(self):
         with self.assertRaises(Unauthenticated): self.L.authenticate("nope")
         with self.assertRaises(ValidationError): self.L.admin_create_user(self.admin, "root")

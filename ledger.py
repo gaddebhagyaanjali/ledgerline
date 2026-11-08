@@ -89,6 +89,11 @@ class Ledger:
         finally: c.close()
         return {"user_id": uid, "role": role, "token": token}   # token shown once; only hash stored
 
+    def whoami(self, user_id):
+        c = self._conn()
+        try: return {"user_id": user_id, "role": self._role(c, user_id)}
+        finally: c.close()
+
     def admin_create_user(self, actor_id, role):
         """Only an administrator can create admin/auditor users (public signup is holder-only)."""
         c = self._conn()

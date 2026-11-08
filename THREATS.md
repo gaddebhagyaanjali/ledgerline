@@ -23,11 +23,14 @@ Each threat names the attack, the defence, and the test that proves it.
 | 15 | **Malformed / oversized / non-object JSON** crashing the server | 16 KB body cap, JSON must be an object, generic 500 hides internals | verified manually (400 responses) |
 | 16 | **Money creation from nothing** | Only the system account may go negative; every entry set sums to zero; global sum checked by `reconcile()` | `test_basic_flow_balances` |
 
+| 17 | **XSS via account data in the dashboard** | All dynamic values rendered with `textContent`; CSP allows only the page's own script (hash) and same-origin requests; `nosniff`; token kept in sessionStorage | manual review (no automated browser test) |
+
 ## Known gaps (not defended; stated honestly)
 - **Deposits are an admin action** standing in for a payment gateway; there is no real external funding source or confirmation.
 - **Demo tokens** (`SEED_DEMO=1`) are public by design; seeding must stay off in anything real.
 - **No rate limiting**, so a client could flood the API or audit log. Mitigation would be a reverse proxy or per-token limits.
 - **Tokens never expire** and are not rotated; there is no TLS inside the app (Render terminates HTTPS in front of it).
+- **Dashboard has no automated browser tests**; the token lives in sessionStorage, so an XSS bug would expose it (mitigated by the CSP above).
 - **Account IDs reveal existence** (404 vs success when sending to an unknown id).
 - **Single-node SQLite**: fine for the assignment; production would use PostgreSQL with row locks.
 - **Free hosting resets the database** on restart.

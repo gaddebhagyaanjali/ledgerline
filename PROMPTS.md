@@ -20,7 +20,7 @@ Claude (Anthropic) in the chat interface.
 | [Add anything else you personally caught] | | |
 
 ## What I verified myself
-- Ran 21 tests locally; ran `demo.py` against my local server and the deployed URL.
+- Ran 22 tests locally; ran `demo.py` against my local server and the deployed URL.
 - [Add: read ledger.py and can explain the locking, the idempotency flow and the reconcile query.]
 
 ## What I would not trust the AI on without checking

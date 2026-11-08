@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LedgerLine</title>
+<style>
+:root{--bg:#f5f6f8;--card:#fff;--fg:#1b1f24;--mut:#5b6573;--line:#dfe3e8;--acc:#1f5fd1;--ok:#13795b;--err:#b42318}
+@media (prefers-color-scheme:dark){:root{--bg:#12151a;--card:#1b2028;--fg:#e8ebf0;--mut:#9aa5b4;--line:#2c3440;--acc:#6ea0ff;--ok:#4cc9a0;--err:#ff8a80}}
+*{box-sizing:border-box}body{margin:0;font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+header{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;background:var(--card);border-bottom:1px solid var(--line)}
+h1{font-size:18px;margin:0}h2{font-size:15px;margin:0 0 10px}
+main{max-width:980px;margin:20px auto;padding:0 16px;display:grid;gap:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+input,select,button{font:inherit;padding:8px 10px;border-radius:7px;border:1px solid var(--line);background:var(--bg);color:var(--fg)}
+input{min-width:0;flex:1}button{cursor:pointer;background:var(--acc);color:#fff;border:0}button.sec{background:transparent;color:var(--acc);border:1px solid var(--acc)}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);word-break:break-all}
+.mut{color:var(--mut);font-size:13px}.badge{background:var(--acc);color:#fff;border-radius:99px;padding:2px 10px;font-size:12px;margin-left:8px}
+pre{margin:8px 0 0;padding:10px;border-radius:7px;background:var(--bg);border:1px solid var(--line);white-space:pre-wrap;word-break:break-all;font-size:12px;max-height:260px;overflow:auto}
+.ok{border-left:4px solid var(--ok)}.err{border-left:4px solid var(--err)}.hide{display:none}
+</style>
+</head>
+<body>
+<header><h1>LedgerLine <span id="badge" class="badge hide"></span></h1><button id="logout" class="sec hide">Sign out</button></header>
+<main>
+ <section class="card" id="loginCard">
+  <h2>Sign in</h2>
+  <div class="row"><input id="tok" type="password" placeholder="Paste your access token" autocomplete="off"><button id="signin">Sign in</button><button id="signup" class="sec">Sign up as account holder</button></div>
+  <p class="mut">Tokens are shown once at sign-up. Save yours; it is the only way back in.</p>
+ </section>
+ <div id="app" class="hide">
+  <section class="card"><h2>Accounts</h2>
+   <table><thead><tr><th>Account ID</th><th>Balance</th><th></th></tr></thead><tbody id="accts"></tbody></table>
+   <div class="row" id="newAcct" style="margin-top:10px"><input id="cur" value="USD" maxlength="3" style="max-width:90px"><button id="mkAcct" class="sec">Open account</button></div>
+  </section>
+  <section class="card" id="moveCard"><h2>Move money</h2>
+   <div class="row">
+    <select id="kind"><option value="transfers">Transfer</option><option value="withdrawals">Withdraw</option><option value="deposits" id="optDep">Deposit (admin)</option></select>
+    <select id="from"></select>
+    <input id="to" placeholder="Destination account ID">
+    <input id="amt" placeholder="Amount e.g. 12.50" style="max-width:150px">
+    <button id="go">Send</button><button id="again" class="sec hide">Resend same request</button>
+   </div>
+   <p class="mut">Every request gets a unique idempotency key. “Resend” repeats the identical request, so it is never paid twice.</p>
+  </section>
+  <section class="card"><h2>Statement <span id="stFor" class="mut"></span></h2>
+   <table><thead><tr><th>#</th><th>Type</th><th>Amount</th><th>Time</th></tr></thead><tbody id="stmt"></tbody></table>
+  </section>
+  <section class="card hide" id="oversight"><h2>Oversight</h2>
+   <div class="row"><button id="rec">Reconcile books</button><button id="aud" class="sec">Load audit log</button><button id="mkAud" class="sec hide">Create auditor</button></div>
+   <table style="margin-top:10px"><thead><tr><th>#</th><th>Action</th><th>Outcome</th><th>User</th></tr></thead><tbody id="audit"></tbody></table>
+  </section>
+  <section class="card"><h2>Last response</h2><pre id="out">Nothing yet.</pre></section>
+ </div>
+</main>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+let token = sessionStorage.getItem("ll_token"), role = null, last = null, accounts = [];
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now() + "-" + Math.random().toString(16).slice(2));
+const money = (n, cur) => (n < 0 ? "-" : "") + (Math.abs(n) / 100).toFixed(2) + (cur ? " " + cur : "");
+const cell = (tr, text) => { const td = document.createElement("td"); td.textContent = String(text); tr.appendChild(td); return td; };
+
+async function api(method, path, body, key) {
+  const h = {"Content-Type": "application/json"};
+  if (token) h.Authorization = "Bearer " + token;
+  if (key) h["Idempotency-Key"] = key;
+  const r = await fetch(path, {method, headers: h, body: body ? JSON.stringify(body) : undefined});
+  let data = {}; try { data = await r.json(); } catch (e) {}
+  return {status: r.status, data};
+}
+function show(res) {
+  const o = $("out"); o.textContent = res.status + "\n" + JSON.stringify(res.data, null, 2);
+  o.className = res.status < 300 ? "ok" : "err";
+}
+function parseAmount(s) {            // "12.50" -> 1250 (integer cents, no floats)
+  const m = /^(\d{1,10})(?:\.(\d{1,2}))?$/.exec(s.trim());
+  return m ? parseInt(m[1], 10) * 100 + parseInt((m[2] || "0").padEnd(2, "0"), 10) : null;
+}
+async function login() {
+  const r = await api("GET", "/me");
+  if (r.status !== 200) { token = null; sessionStorage.removeItem("ll_token"); show(r); return; }
+  role = r.data.role;
+  $("badge").textContent = role; $("badge").classList.remove("hide");
+  $("loginCard").classList.add("hide"); $("app").classList.remove("hide"); $("logout").classList.remove("hide");
+  const oversee = role !== "holder";
+  $("oversight").classList.toggle("hide", !oversee);
+  $("mkAud").classList.toggle("hide", role !== "admin");
+  $("optDep").disabled = role !== "admin";
+  $("newAcct").classList.toggle("hide", role === "auditor");
+  $("moveCard").classList.toggle("hide", role === "auditor");
+  await refresh();
+}
+async function refresh() {
+  const r = await api("GET", "/accounts"); if (r.status !== 200) return show(r);
+  accounts = r.data; const body = $("accts"); body.replaceChildren();
+  const from = $("from"); from.replaceChildren();
+  for (const a of accounts) {
+    const tr = document.createElement("tr");
+    cell(tr, a.account_id); cell(tr, money(a.balance, a.currency));
+    const b = document.createElement("button"); b.className = "sec"; b.textContent = "Statement";
+    b.onclick = () => statement(a.account_id); const td = document.createElement("td"); td.appendChild(b); tr.appendChild(td);
+    body.appendChild(tr);
+    const o = document.createElement("option"); o.value = a.account_id; o.textContent = a.account_id.slice(0, 8) + "… (" + money(a.balance, a.currency) + ")"; from.appendChild(o);
+  }
+}
+async function statement(id) {
+  const r = await api("GET", "/accounts/" + id + "/entries"); if (r.status !== 200) return show(r);
+  $("stFor").textContent = id.slice(0, 8) + "…"; const b = $("stmt"); b.replaceChildren();
+  for (const e of r.data) { const tr = document.createElement("tr");
+    cell(tr, e.id); cell(tr, e.kind); cell(tr, money(e.amount)); cell(tr, new Date(e.created_at * 1000).toLocaleString()); b.appendChild(tr); }
+}
+async function send(req) {
+  const res = await api("POST", req.path, req.body, req.key); show(res);
+  $("again").classList.remove("hide"); await refresh();
+}
+$("signin").onclick = () => { token = $("tok").value.trim(); sessionStorage.setItem("ll_token", token); login(); };
+$("signup").onclick = async () => {
+  const r = await api("POST", "/users"); show(r);
+  if (r.status === 201) { $("tok").value = r.data.token; $("out").textContent += "\n\nSAVE THIS TOKEN NOW. It is shown only once."; }
+};
+$("logout").onclick = () => { sessionStorage.removeItem("ll_token"); location.reload(); };
+$("mkAcct").onclick = async () => { show(await api("POST", "/accounts", {currency: $("cur").value})); refresh(); };
+$("go").onclick = () => {
+  const amount = parseAmount($("amt").value); if (amount === null || amount <= 0) return show({status: 400, data: {error: "enter an amount like 12.50"}});
+  const kind = $("kind").value, from = $("from").value, to = $("to").value.trim();
+  const body = kind === "transfers" ? {from, to, amount} : kind === "deposits" ? {account_id: to || from, amount} : {account_id: from, amount};
+  last = {path: "/" + kind, body, key: uid()}; send(last);
+};
+$("again").onclick = () => last && send(last);
+$("rec").onclick = async () => show(await api("GET", "/reconcile"));
+$("aud").onclick = async () => {
+  const r = await api("GET", "/audit?limit=50"); if (r.status !== 200) return show(r);
+  const b = $("audit"); b.replaceChildren();
+  for (const e of r.data) { const tr = document.createElement("tr"); cell(tr, e.id); cell(tr, e.action); cell(tr, e.outcome); cell(tr, (e.user_id || "").slice(0, 8)); b.appendChild(tr); }
+};
+$("mkAud").onclick = async () => { const r = await api("POST", "/admin/users", {role: "auditor"}); show(r); if (r.status === 201) $("out").textContent += "\n\nGive this token to the auditor. It is shown only once."; };
+if (token) login();
+</script>
+</body>
+</html>
