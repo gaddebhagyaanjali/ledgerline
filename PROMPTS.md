@@ -45,6 +45,12 @@ Tool: Claude (Anthropic), in the chat interface. I kept this log as I worked.
 - **What was wrong:** Claude could not tell from my screenshot what had happened, so its first answer was only a guess.
 - **What I did instead:** I ran Reconcile, which said the books balance. Claude's clean test, one 5.00 transfer plus one resend, also gave the right balances. I never saw what caused my first odd numbers, so I treat that as unexplained, probably an extra test transfer.
 
+## Entry 8: 2026-11-08
+- **What I asked:** I asked Claude for a full progress review and told it to check the real code instead of assuming things were done.
+- **What the tool produced:** A report listing security gaps, then Claude re-checked each one against the code. It confirmed that failed logins and denied reads left no trace in the audit log.
+- **What was wrong (audit trail):** Someone guessing tokens or probing other people's accounts left no record. Claude also admitted two of its own checks were sloppy (one printed "True" without testing anything) and redid them properly.
+- **What I did instead:** I had Claude fix one issue at a time, with tests. Refused logins, reads and admin-page attempts are now audited. Five of the six new tests fail on the old code, which shows they test the fix. Commit `6e2f5aa`.
+
 ## What I checked myself    
 - I ran 22 automated tests and the 17-step demo script on my own computer, and they passed.
 
