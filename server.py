@@ -27,6 +27,10 @@ def bootstrap():
     if os.environ.get("SEED_DEMO") == "1":
         L.seed_demo(admin_id); print("Demo data seeded (demo-alice-token, demo-bob-token, demo-auditor-token).")
 
+class Server(ThreadingHTTPServer):
+    request_queue_size = 256      # default is 5: bursts of parallel requests were being reset
+    daemon_threads = True
+
 class H(BaseHTTPRequestHandler):
     def _send(self, status, body):
         data = json.dumps(body).encode()
@@ -103,4 +107,4 @@ if __name__ == "__main__":
     bootstrap()
     port = int(os.environ.get("PORT", 8000))
     print(f"LedgerLine on port {port}")
-    ThreadingHTTPServer(("0.0.0.0", port), H).serve_forever()
+    Server(("0.0.0.0", port), H).serve_forever()
