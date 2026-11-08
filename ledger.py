@@ -1,5 +1,5 @@
 """LedgerLine core: double-entry ledger with idempotency, authorisation and audit trail."""
-import hashlib, json, secrets, sqlite3, time, uuid
+import contextlib, hashlib, json, secrets, sqlite3, time, uuid
 
 class LedgerError(Exception):
     status, code = 400, "bad_request"
@@ -96,11 +96,12 @@ class Ledger:
 
     def admin_create_user(self, actor_id, role):
         """Only an administrator can create admin/auditor users (public signup is holder-only)."""
-        c = self._conn()
-        try:
-            if self._role(c, actor_id) != "admin": raise Forbidden("administrators only")
-        finally: c.close()
-        return self.create_user(role)
+        with self._audited(actor_id, "create_staff_user", str(role)[:30]):
+            c = self._conn()
+            try:
+                if self._role(c, actor_id) != "admin": raise Forbidden("administrators only")
+            finally: c.close()
+            return self.create_user(role)
 
     def ensure_user(self, token, role):
         """Bootstrap helper: create the user for this token if it does not exist yet."""
@@ -111,24 +112,29 @@ class Ledger:
         return r["id"] if r else self.create_user(role, token)["user_id"]
 
     def authenticate(self, token):
-        if not token: raise Unauthenticated("missing token")
+        if not token:
+            self._audit(None, "authenticate", None, "no token supplied", "rejected:unauthenticated")
+            raise Unauthenticated("missing token")
         c = self._conn()
         r = c.execute("SELECT id FROM users WHERE token_hash=?", (_h(token),)).fetchone()
         c.close()
-        if not r: raise Unauthenticated("invalid token")
+        if not r:
+            self._audit(None, "authenticate", None, "token_hash:" + _h(token)[:8], "rejected:unauthenticated")
+            raise Unauthenticated("invalid token")
         return r["id"]
 
     def create_account(self, user_id, currency):
-        if not (isinstance(currency, str) and len(currency) == 3 and currency.isalpha()):
-            raise ValidationError("currency must be a 3-letter code")
-        aid = _id()
-        c = self._conn()
-        try:
-            if self._role(c, user_id) == "auditor": raise Forbidden("auditors are read-only")
-            c.execute("INSERT INTO accounts(id,owner_id,currency) VALUES(?,?,?)",
-                      (aid, user_id, currency.upper()))
-        finally: c.close()
-        return {"account_id": aid, "currency": currency.upper(), "balance": 0}
+        with self._audited(user_id, "create_account", str(currency)[:10]):
+            if not (isinstance(currency, str) and len(currency) == 3 and currency.isalpha()):
+                raise ValidationError("currency must be a 3-letter code")
+            aid = _id()
+            c = self._conn()
+            try:
+                if self._role(c, user_id) == "auditor": raise Forbidden("auditors are read-only")
+                c.execute("INSERT INTO accounts(id,owner_id,currency) VALUES(?,?,?)",
+                          (aid, user_id, currency.upper()))
+            finally: c.close()
+            return {"account_id": aid, "currency": currency.upper(), "balance": 0}
 
     def seed_demo(self, admin_id):
         """Demo data: two holders, one auditor, funded accounts. Idempotent. Only used if SEED_DEMO=1."""
@@ -241,6 +247,15 @@ class Ledger:
         finally:
             c.close()
 
+    @contextlib.contextmanager
+    def _audited(self, user_id, action, detail=""):
+        """Run a block; if the request is refused (403/404/400...), write it to the audit log, then re-raise."""
+        try:
+            yield
+        except LedgerError as e:
+            self._audit(user_id, action, None, detail, "rejected:" + e.code)
+            raise
+
     # ---------- reads ----------
     def _viewable(self, c, user_id, account_id):
         """Holders see only their own accounts; auditors and admins may read any (read-only)."""
@@ -251,11 +266,12 @@ class Ledger:
         return a
 
     def get_account(self, user_id, account_id):
-        c = self._conn()
-        try:
-            a = self._viewable(c, user_id, account_id)
-            return {"account_id": a["id"], "currency": a["currency"], "balance": a["balance"]}
-        finally: c.close()
+        with self._audited(user_id, "read_account", str(account_id)[:64]):
+            c = self._conn()
+            try:
+                a = self._viewable(c, user_id, account_id)
+                return {"account_id": a["id"], "currency": a["currency"], "balance": a["balance"]}
+            finally: c.close()
 
     def list_accounts(self, user_id):
         c = self._conn()
@@ -268,33 +284,36 @@ class Ledger:
         finally: c.close()
 
     def statement(self, user_id, account_id):
-        c = self._conn()
-        try:
-            self._viewable(c, user_id, account_id)
-            rows = c.execute("SELECT e.id,e.txn_id,t.kind,e.amount,e.created_at FROM entries e "
-                             "JOIN transactions t ON t.id=e.txn_id WHERE e.account_id=? ORDER BY e.id",
-                             (account_id,)).fetchall()
-            return [dict(r) for r in rows]
-        finally: c.close()
+        with self._audited(user_id, "read_statement", str(account_id)[:64]):
+            c = self._conn()
+            try:
+                self._viewable(c, user_id, account_id)
+                rows = c.execute("SELECT e.id,e.txn_id,t.kind,e.amount,e.created_at FROM entries e "
+                                 "JOIN transactions t ON t.id=e.txn_id WHERE e.account_id=? ORDER BY e.id",
+                                 (account_id,)).fetchall()
+                return [dict(r) for r in rows]
+            finally: c.close()
 
     def _oversight(self, c, user_id):
         if self._role(c, user_id) not in ("admin", "auditor"):
             raise Forbidden("auditors and administrators only")
 
     def audit_entries(self, user_id, limit=100):
-        c = self._conn()
-        try:
-            self._oversight(c, user_id)
-            limit = max(1, min(int(limit), 500))
-            rows = c.execute("SELECT id,ts,user_id,action,idem_key,detail,outcome FROM audit_log "
-                             "ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
-            return [dict(r) for r in rows]
-        finally: c.close()
+        with self._audited(user_id, "read_audit_log"):
+            c = self._conn()
+            try:
+                self._oversight(c, user_id)
+                limit = max(1, min(int(limit), 500))
+                rows = c.execute("SELECT id,ts,user_id,action,idem_key,detail,outcome FROM audit_log "
+                                 "ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+                return [dict(r) for r in rows]
+            finally: c.close()
 
     def reconcile(self, user_id):
-        c = self._conn()
-        try: self._oversight(c, user_id)
-        finally: c.close()
+        with self._audited(user_id, "reconcile"):
+            c = self._conn()
+            try: self._oversight(c, user_id)
+            finally: c.close()
         return self._reconcile()
 
     def _reconcile(self):

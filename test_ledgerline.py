@@ -153,4 +153,54 @@ class T(unittest.TestCase):
         tok = self.L.authenticate("demo-alice-token")
         self.assertEqual(self.L.list_accounts(tok)[0]["balance"], 100000)
 
+    # ---- audit of refused access (not only refused money movements)
+    def _audit_rows(self, n=10): return self.L.audit_entries(self.auditor, n)   # newest first
+
+    def test_failed_login_is_audited_without_storing_the_token(self):
+        guess = "super-secret-guess-123"
+        with self.assertRaises(Unauthenticated): self.L.authenticate(guess)
+        with self.assertRaises(Unauthenticated): self.L.authenticate(None)
+        newest, older = self._audit_rows(2)
+        self.assertEqual((newest["action"], newest["detail"], newest["outcome"]),
+                         ("authenticate", "no token supplied", "rejected:unauthenticated"))
+        self.assertIsNone(older["user_id"]); self.assertTrue(older["detail"].startswith("token_hash:"))
+        dump = str(sqlite3.connect(self.path).execute("SELECT * FROM audit_log").fetchall())
+        self.assertNotIn(guess, dump)                      # the guessed token itself is never stored
+
+    def test_denied_and_missing_account_reads_are_audited(self):
+        with self.assertRaises(Forbidden): self.L.get_account(self.alice, self.b)
+        with self.assertRaises(NotFound): self.L.get_account(self.alice, "0" * 32)
+        missing, denied = self._audit_rows(2)
+        self.assertEqual((denied["user_id"], denied["action"], denied["detail"], denied["outcome"]),
+                         (self.alice, "read_account", self.b, "rejected:forbidden"))
+        self.assertEqual((missing["action"], missing["outcome"]), ("read_account", "rejected:not_found"))
+
+    def test_denied_statement_read_is_audited(self):
+        with self.assertRaises(Forbidden): self.L.statement(self.alice, self.b)
+        row = self._audit_rows(1)[0]
+        self.assertEqual((row["user_id"], row["action"], row["outcome"]),
+                         (self.alice, "read_statement", "rejected:forbidden"))
+
+    def test_holder_denied_oversight_is_audited(self):
+        with self.assertRaises(Forbidden): self.L.audit_entries(self.alice)
+        with self.assertRaises(Forbidden): self.L.reconcile(self.alice)
+        recon, audit = self._audit_rows(2)
+        self.assertEqual((recon["action"], recon["user_id"], recon["outcome"]), ("reconcile", self.alice, "rejected:forbidden"))
+        self.assertEqual((audit["action"], audit["user_id"], audit["outcome"]), ("read_audit_log", self.alice, "rejected:forbidden"))
+
+    def test_denied_staff_creation_and_auditor_account_creation_are_audited(self):
+        with self.assertRaises(Forbidden): self.L.admin_create_user(self.alice, "admin")
+        with self.assertRaises(Forbidden): self.L.create_account(self.auditor, "USD")
+        acct, staff = self._audit_rows(2)
+        self.assertEqual((staff["action"], staff["user_id"], staff["detail"], staff["outcome"]),
+                         ("create_staff_user", self.alice, "admin", "rejected:forbidden"))
+        self.assertEqual((acct["action"], acct["user_id"], acct["outcome"]),
+                         ("create_account", self.auditor, "rejected:forbidden"))
+
+    def test_successful_reads_do_not_flood_the_audit_log(self):
+        before = len(self._audit_rows(500))
+        self.L.get_account(self.alice, self.a); self.L.statement(self.alice, self.a); self.L.list_accounts(self.alice)
+        self.assertEqual(len(self._audit_rows(500)), before)
+
+
 if __name__ == "__main__": unittest.main(verbosity=1)
