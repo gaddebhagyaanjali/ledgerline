@@ -51,8 +51,8 @@ Tool: Claude (Anthropic), in the chat interface. I kept this log as I worked.
 - **What was wrong (audit trail):** Someone guessing tokens or probing other people's accounts left no record. Claude also admitted two of its own checks were sloppy (one printed "True" without testing anything) and redid them properly.
 - **What I did instead:** I had Claude fix one issue at a time, with tests. Refused logins, reads and admin-page attempts are now audited. Five of the six new tests fail on the old code, which shows they test the fix. Commit `6e2f5aa`.
 
-## What I checked myself    
-- I ran 22 automated tests and the 17-step demo script on my own computer, and they passed.
+## What I checked myself
+- I ran 28 automated tests and the 17-step demo script on my own computer, and they passed.
 
 ## What I would not trust the AI on without checking
 Concurrency claims (I check them with the thread tests), deployment settings, and anything touching security defaults.
