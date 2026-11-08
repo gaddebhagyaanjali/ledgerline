@@ -1,11 +1,11 @@
 # LedgerLine: money movement with a ledger you can prove
 
 Python 3 standard library + SQLite. No dependencies. **Live URL:** `<add after deploying>`
-See `THREATS.md` (threat model + tests), `PROMPTS.md` and `AI_USAGE.md` (AI use).
+See `THREATS.md` (threat model + tests) and `PROMPTS.md` (AI use log).
 
 ## Run locally
 ```
-python3 test_ledgerline.py                                   # 22 tests incl. concurrency
+python3 test_ledgerline.py                                   # 28 tests incl. concurrency
 ADMIN_TOKEN=<16+ chars> SEED_DEMO=1 python3 server.py        # API on :8000
 ADMIN_TOKEN=<same> python3 demo.py                           # guided demo (second terminal)
 ```
