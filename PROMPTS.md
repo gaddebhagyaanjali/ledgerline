@@ -45,7 +45,7 @@ Tool: Claude (Anthropic), in the chat interface. I kept this log as I worked.
 - **What was wrong:** Claude could not tell from my screenshot what had happened, so its first answer was only a guess.
 - **What I did instead:** I ran Reconcile, which said the books balance. Claude's clean test, one 5.00 transfer plus one resend, also gave the right balances. I never saw what caused my first odd numbers, so I treat that as unexplained, probably an extra test transfer.
 
-## What I checked myself
+## What I checked myself    
 - I ran 22 automated tests and the 17-step demo script on my own computer, and they passed.
 
 ## What I would not trust the AI on without checking
