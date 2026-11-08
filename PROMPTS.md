@@ -43,7 +43,7 @@ Tool: Claude (Anthropic), in the chat interface. I kept this log as I worked.
 - **What I asked:** After one 5.00 transfer in the dashboard, the balances did not match what I expected, and I asked Claude why.
 - **What the tool produced:** Claude guessed it was an extra transfer from my testing, then ran a clean test on its own copy: one 5.00 transfer, one resend, and the books balanced.
 - **What was wrong:** Claude could not tell from my screenshot what had happened, so its first answer was only a guess.
-- **What I did instead:** I checked the account statements, which list every entry, and ran Reconcile, which said the books balance. The transactions were all correct.
+- **What I did instead:** I ran Reconcile, which said the books balance. Claude's clean test, one 5.00 transfer plus one resend, also gave the right balances. I never saw what caused my first odd numbers, so I treat that as unexplained, probably an extra test transfer.
 
 ## What I checked myself
 - I ran 22 automated tests and the 17-step demo script on my own computer, and they passed.
