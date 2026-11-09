@@ -5,7 +5,7 @@ See `THREATS.md` (threat model + tests) and `PROMPTS.md` (AI use log).
 
 ## Run locally
 ```
-python3 test_ledgerline.py                                   # 28 tests incl. concurrency
+python3 test_ledgerline.py                                   # 33 tests incl. concurrency
 ADMIN_TOKEN=<16+ chars> SEED_DEMO=1 python3 server.py        # API on :8000
 ADMIN_TOKEN=<same> python3 demo.py                           # guided demo (second terminal)
 ```
@@ -18,7 +18,7 @@ Open `http://localhost:8000/` (or the live URL). Sign in with a token (or sign u
 | Role | Can | Cannot |
 |---|---|---|
 | **holder** (public signup `POST /users`) | open accounts; withdraw/transfer from **own** accounts; read own balance and statement | fund accounts, see others' accounts, audit log |
-| **admin** (from `ADMIN_TOKEN`) | fund accounts (deposits), create auditors/admins, read everything, reconcile | withdraw or transfer a customer's money |
+| **admin** (from `ADMIN_TOKEN`) | fund account holders' accounts (deposits), create auditors/admins, read everything, reconcile | withdraw or transfer a customer's money; open or own accounts |
 | **auditor** (created by admin) | read every account, statement, audit log, reconcile | any write |
 
 Seed data (only if `SEED_DEMO=1`): tokens `demo-alice-token` (holder, $1000.00), `demo-bob-token` (holder, $50.00), `demo-auditor-token`. These are public demo tokens, so never enable seeding on a real system.
@@ -28,12 +28,12 @@ Seed data (only if `SEED_DEMO=1`): tokens `demo-alice-token` (holder, $1000.00),
 |---|---|---|
 | POST | /users | anyone (creates a holder; token returned once) |
 | POST | /admin/users `{"role":"auditor"}` | admin |
-| POST | /accounts `{"currency":"USD"}` | holder/admin |
+| POST | /accounts `{"currency":"USD"}` | holder only |
 | GET | / | the dashboard (no auth) |
 | GET | /me | any user: your id and role |
 | GET | /accounts | own accounts (holder) or all (admin/auditor) |
 | GET | /accounts/{id}, /accounts/{id}/entries | owner, admin, auditor |
-| POST | /deposits `{"account_id","amount"}` | admin |
+| POST | /deposits `{"account_id","amount"}` | admin, into a holder's account only |
 | POST | /withdrawals `{"account_id","amount"}` | account owner |
 | POST | /transfers `{"from","to","amount"}` | owner of `from` |
 | GET | /audit?limit=N | admin/auditor |
@@ -50,4 +50,4 @@ POST money endpoints **require** an `Idempotency-Key` header. Errors: 400 valida
 - **Proof:** `/reconcile` recomputes every balance from entries and checks that every transaction and the whole ledger sum to zero.
 
 ## Limitations (honest list)
-Dashboard is basic and was only tested by hand. Tokens do not expire and there is no rate limiting. SQLite single node; free hosting resets the database on restart. No reversals, pagination, or multi-currency FX. Audit log has no hash chain.
+An admin can still fund an account held by a second identity they control (deposits stand in for a payment gateway; there is no real external funding check). Dashboard is basic and was only tested by hand. Tokens do not expire and there is no rate limiting. SQLite single node; free hosting resets the database on restart. No reversals, pagination, or multi-currency FX. Audit log has no hash chain.
