@@ -203,4 +203,37 @@ class T(unittest.TestCase):
         self.assertEqual(len(self._audit_rows(500)), before)
 
 
+    # ---- separation of duties: an admin must not be able to mint money for themselves
+    def test_admins_and_auditors_cannot_open_accounts(self):
+        for who in (self.admin, self.auditor):
+            with self.assertRaises(Forbidden): self.L.create_account(who, "USD")
+        self.assertEqual(self.L.list_accounts(self.admin).__len__(), 2)   # only alice's and bob's exist
+        row = self._audit_rows(1)[0]
+        self.assertEqual((row["action"], row["outcome"]), ("create_account", "rejected:forbidden"))
+
+    def test_deposit_into_a_non_holder_account_is_refused(self):
+        # Simulate an old/legacy account owned by staff (bypassing the API) to test the second rule on its own.
+        c = sqlite3.connect(self.path)
+        for who, aid in ((self.admin, "legacy-admin-acct"), (self.auditor, "legacy-auditor-acct")):
+            c.execute("INSERT INTO accounts(id,owner_id,currency) VALUES(?,?,?)", (aid, who, "USD"))
+        c.commit(); c.close()
+        for i, aid in enumerate(("legacy-admin-acct", "legacy-auditor-acct")):
+            with self.assertRaises(Forbidden): self.L.deposit(self.admin, f"mint{i}", aid, 500000)
+            self.assertEqual(self.L.get_account(self.admin, aid)["balance"], 0)
+        self.assertTrue(self.L.reconcile(self.auditor)["ok"])
+
+    def test_deposit_into_the_system_account_is_refused(self):
+        self.fund(self.a, 100)                       # creates system-USD
+        with self.assertRaises(Forbidden): self.L.deposit(self.admin, "sys", "system-USD", 50)
+
+    def test_refused_mint_attempt_is_audited(self):
+        with self.assertRaises(Forbidden): self.L.create_account(self.admin, "USD")
+        with self.assertRaises(NotFound): self.L.deposit(self.admin, "x", "no-such-account", 5)
+        self.assertEqual({r["outcome"] for r in self._audit_rows(2)}, {"rejected:forbidden", "rejected:not_found"})
+
+    def test_admin_can_still_fund_a_holder(self):
+        r = self.fund(self.a, 1234)
+        self.assertEqual((r["status"], self.bal(self.alice, self.a)), ("completed", 1234))
+
+
 if __name__ == "__main__": unittest.main(verbosity=1)

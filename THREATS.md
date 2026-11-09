@@ -14,6 +14,7 @@ Each threat names the attack, the defence, and the test that proves it.
 | 8 | **Missing / forged token** | Bearer token to user via stored SHA-256 hash; 401 otherwise. Tokens are 256-bit random | `test_bad_token_and_unknown_role` |
 | 9 | **Privilege escalation** (holder becomes admin/auditor, self-funds, reads audit log) | Roles in DB; public signup only makes holders; only admins create staff; deposits admin-only; oversight reads need admin/auditor; admin `ADMIN_TOKEN` has no default and must be 16+ chars | `test_holders_cannot_print_money`, `test_holders_cannot_see_audit_log_or_reconcile_or_make_staff`, `test_admin_can_fund_but_never_withdraw_or_transfer_customer_money` |
 | 9b | **Auditor tampering** | Auditors are read-only for every write path | `test_auditor_is_read_only_but_sees_everything` |
+| 9d | **Admin mints money for themselves** (opens an account, funds it, withdraws it; or deposits into the system account) | Only account holders can own accounts; a deposit may only land in a holder-owned account, so admin-owned, auditor-owned and system accounts are refused | `test_admins_and_auditors_cannot_open_accounts`, `test_deposit_into_a_non_holder_account_is_refused`, `test_deposit_into_the_system_account_is_refused`, `test_refused_mint_attempt_is_audited`, `test_admin_can_still_fund_a_holder` |
 | 9c | **Opposing concurrent transfers** (lost updates, money created/destroyed) | Serialised writes; conservation checked | `test_concurrent_opposite_transfers_conserve_money` |
 | 10 | **Partial failure** (debit without credit) | One DB transaction: debit, credit, entries, idempotency record commit or roll back together | `test_failed_transfer_leaves_no_partial_state` |
 | 11 | **Cross-currency transfer** (value created by mixing currencies) | Currency must match on both accounts | `test_currency_mismatch_and_self_transfer` |
@@ -27,6 +28,7 @@ Each threat names the attack, the defence, and the test that proves it.
 
 ## Known gaps (not defended; stated honestly)
 - **Deposits are an admin action** standing in for a payment gateway; there is no real external funding source or confirmation.
+- **An admin can still create or use a second identity** (a holder account they control, e.g. via public signup) and fund it. Task 2 only stops the direct self-mint. The deposit is audited and capped per request, but there is no two-person approval or external check.
 - **Demo tokens** (`SEED_DEMO=1`) are public by design; seeding must stay off in anything real.
 - **No rate limiting**, so a client could flood the API. It can also grow the audit log by sending many bad requests, because refused requests are now recorded. Mitigation: per-client request limits (not built yet).
 - **Tokens never expire** and are not rotated; there is no TLS inside the app (Render terminates HTTPS in front of it).

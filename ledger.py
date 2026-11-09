@@ -130,7 +130,8 @@ class Ledger:
             aid = _id()
             c = self._conn()
             try:
-                if self._role(c, user_id) == "auditor": raise Forbidden("auditors are read-only")
+                if self._role(c, user_id) != "holder":
+                    raise Forbidden("only account holders can open accounts")
                 c.execute("INSERT INTO accounts(id,owner_id,currency) VALUES(?,?,?)",
                           (aid, user_id, currency.upper()))
             finally: c.close()
@@ -200,7 +201,11 @@ class Ledger:
                 if not r: raise NotFound("account not found")
                 return r
             if kind == "deposit":
-                d = load(dst); s = load(self._system_account(c, d["currency"]))
+                d = load(dst)
+                owner = c.execute("SELECT role FROM users WHERE id=?", (d["owner_id"],)).fetchone()
+                if not owner or owner["role"] != "holder":
+                    raise Forbidden("deposits can only go into an account holder's account")
+                s = load(self._system_account(c, d["currency"]))
             elif kind == "withdrawal":
                 s = load(src); d = load(self._system_account(c, s["currency"]))
             else:

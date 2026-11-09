@@ -88,7 +88,7 @@ async function login() {
   $("oversight").classList.toggle("hide", !oversee);
   $("mkAud").classList.toggle("hide", role !== "admin");
   $("optDep").disabled = role !== "admin";
-  $("newAcct").classList.toggle("hide", role === "auditor");
+  $("newAcct").classList.toggle("hide", role !== "holder");
   $("moveCard").classList.toggle("hide", role === "auditor");
   await refresh();
 }
