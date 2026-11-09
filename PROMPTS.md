@@ -55,7 +55,7 @@ Tool: Claude (Anthropic), in the chat interface. I kept this log as I worked.
 - **What I asked:** I told Claude to stop an admin from minting money into their own account, and to explain, test and wait for my review.
 - **What the tool produced:** It first reproduced the problem on the current code: an admin opened an account, funded it with 5,000.00 and withdrew it, and the books still balanced. While inspecting, it also found that an admin could deposit into the system account.
 - **What was wrong (authorisation):** The first design let admins own accounts and let deposits land anywhere. One of Claude's own new tests was also wrong (it expected the wrong error for a missing account); the test run showed the mistake and Claude fixed the test, not the code.
-- **What I did instead:** Admins and auditors can no longer open accounts, and deposits are refused unless the destination belongs to a holder. Four of the five new tests fail on the old code. An admin can still fund a second identity they control; I recorded that as a known gap in THREATS.md. Commit `15c292d`.
+- **What I did instead:** Admins and auditors can no longer open accounts, and deposits are refused unless the destination belongs to a holder. FoFour of the five new tests fail on the old code. An admin can still fund a second identity they control; I recorded that as a known gap in THREATS.md. Commit `15c292d`.
 
 ## What I checked myself
 - I ran 33 automated tests and the 17-step demo script on my own computer, and they passed.
