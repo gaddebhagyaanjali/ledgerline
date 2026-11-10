@@ -25,11 +25,13 @@ Each threat names the attack, the defence, and the test that proves it.
 | 16 | **Money creation from nothing** | Only the system account may go negative; every entry set sums to zero; global sum checked by `reconcile()` | `test_basic_flow_balances` |
 
 | 17 | **XSS via account data in the dashboard** | All dynamic values rendered with `textContent`; CSP allows only the page's own script (hash) and same-origin requests; `nosniff`; token kept in sessionStorage | manual review (no automated browser test) |
+| 18 | **Probe endpoints leak internals or take the service down** (`/health`, `/ready`) | Public but return only `ok`/`error` per dependency, never error text, paths or versions; `/health` does not touch the database, so a database outage cannot make the process look dead; `/ready` returns 503 instead of crashing | `test_health_is_public_and_ok`, `test_ready_reports_database_ok`, `test_ready_returns_503_without_leaking_details`, `test_health_stays_ok_when_database_is_down` |
 
 ## Known gaps (not defended; stated honestly)
 - **Deposits are an admin action** standing in for a payment gateway; there is no real external funding source or confirmation.
 - **An admin can still create or use a second identity** (a holder account they control, e.g. via public signup) and fund it. Task 2 only stops the direct self-mint. The deposit is audited and capped per request, but there is no two-person approval or external check.
 - **Demo tokens** (`SEED_DEMO=1`) are public by design; seeding must stay off in anything real.
+- **`/ready` only checks the database.** There is no Redis (or other) dependency yet.
 - **No rate limiting**, so a client could flood the API. It can also grow the audit log by sending many bad requests, because refused requests are now recorded. Mitigation: per-client request limits (not built yet).
 - **Tokens never expire** and are not rotated; there is no TLS inside the app (Render terminates HTTPS in front of it).
 - **Dashboard has no automated browser tests**; the token lives in sessionStorage, so an XSS bug would expose it (mitigated by the CSP above).

@@ -66,6 +66,13 @@ class H(BaseHTTPRequestHandler):
             sp = urlsplit(self.path); p = sp.path
             if method == "GET" and p in ("/", "/index.html"):
                 return self._send_page()
+            if method == "GET" and p == "/health":       # liveness: the process is up (no database, no login)
+                return self._send(200, {"status": "ok"})
+            if method == "GET" and p == "/ready":        # readiness: the things it depends on work
+                checks = L.readiness()
+                ok = all(checks.values())
+                return self._send(200 if ok else 503, {"status": "ready" if ok else "not_ready",
+                                                       "checks": {k: "ok" if v else "error" for k, v in checks.items()}})
             if method == "POST" and p == "/users":          # public signup: account holders only
                 return self._send(201, L.create_user("holder"))
             u = self._user()

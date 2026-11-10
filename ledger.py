@@ -94,6 +94,17 @@ class Ledger:
         try: return {"user_id": user_id, "role": self._role(c, user_id)}
         finally: c.close()
 
+    def readiness(self):
+        """Can this instance serve traffic? One True/False per dependency. Never returns error text,
+        so a failing probe cannot leak paths, hostnames or credentials."""
+        try:
+            c = self._conn()
+            try: c.execute("SELECT 1 FROM users LIMIT 1").fetchone()
+            finally: c.close()
+            return {"database": True}
+        except Exception:
+            return {"database": False}
+
     def admin_create_user(self, actor_id, role):
         """Only an administrator can create admin/auditor users (public signup is holder-only)."""
         with self._audited(actor_id, "create_staff_user", str(role)[:30]):

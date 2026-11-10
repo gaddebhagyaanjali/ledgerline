@@ -1,4 +1,4 @@
-import os, tempfile, sqlite3, threading, unittest
+import json, os, tempfile, sqlite3, threading, unittest, urllib.error, urllib.request
 from ledger import *
 
 class T(unittest.TestCase):
@@ -234,6 +234,72 @@ class T(unittest.TestCase):
     def test_admin_can_still_fund_a_holder(self):
         r = self.fund(self.a, 1234)
         self.assertEqual((r["status"], self.bal(self.alice, self.a)), ("completed", 1234))
+
+
+class HttpTests(unittest.TestCase):
+    """Tests through the real HTTP server (a second layer of defence: the API itself, not just ledger.py)."""
+    @classmethod
+    def setUpClass(cls):
+        cls.path = tempfile.mktemp(suffix=".db")
+        os.environ["LEDGER_DB"] = cls.path           # must be set before server.py is imported
+        import server
+        cls.srv = server
+        cls.httpd = server.Server(("127.0.0.1", 0), server.H)
+        cls.port = cls.httpd.server_address[1]
+        threading.Thread(target=cls.httpd.serve_forever, daemon=True).start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.httpd.shutdown(); cls.httpd.server_close()
+        for suffix in ("", "-wal", "-shm"):
+            if os.path.exists(cls.path + suffix): os.remove(cls.path + suffix)
+
+    def call(self, method, path, data=None, headers=None):
+        req = urllib.request.Request(f"http://127.0.0.1:{self.port}{path}", data=data, method=method, headers=headers or {})
+        try:
+            with urllib.request.urlopen(req, timeout=10) as r: return r.status, r.read(), r.headers
+        except urllib.error.HTTPError as e: return e.code, e.read(), e.headers
+
+    def test_health_is_public_and_ok(self):
+        status, body, _ = self.call("GET", "/health")
+        self.assertEqual((status, json.loads(body)), (200, {"status": "ok"}))
+
+    def test_ready_reports_database_ok(self):
+        status, body, _ = self.call("GET", "/ready")
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body), {"status": "ready", "checks": {"database": "ok"}})
+
+    def test_ready_returns_503_without_leaking_details(self):
+        led, good = self.srv.L, self.srv.L.path
+        led.path = "/nonexistent-folder/secret-name.db"          # make the database unreachable
+        try: status, body, _ = self.call("GET", "/ready")
+        finally: led.path = good
+        self.assertEqual(status, 503)
+        self.assertEqual(json.loads(body), {"status": "not_ready", "checks": {"database": "error"}})
+        self.assertNotIn(b"nonexistent", body); self.assertNotIn(b"secret-name", body)
+
+    def test_health_stays_ok_when_database_is_down(self):
+        led, good = self.srv.L, self.srv.L.path
+        led.path = "/nonexistent-folder/x.db"
+        try: status, _, _ = self.call("GET", "/health")
+        finally: led.path = good
+        self.assertEqual(status, 200)                            # liveness must not depend on the database
+
+    def test_dashboard_has_security_headers(self):
+        status, _, headers = self.call("GET", "/")
+        self.assertEqual(status, 200)
+        csp = headers.get("Content-Security-Policy", "")
+        self.assertIn("default-src 'none'", csp); self.assertIn("frame-ancestors 'none'", csp)
+        self.assertEqual(headers.get("X-Content-Type-Options"), "nosniff")
+
+    def test_protected_route_without_token_is_401(self):
+        status, body, _ = self.call("GET", "/accounts")
+        self.assertEqual((status, json.loads(body)["error"]), (401, "unauthenticated"))
+
+    def test_bad_json_is_400_not_500(self):
+        token = self.srv.L.create_user("admin")["token"]
+        status, _, _ = self.call("POST", "/deposits", b"{bad", {"Authorization": "Bearer " + token, "Idempotency-Key": "k1"})
+        self.assertEqual(status, 400)
 
 
 if __name__ == "__main__": unittest.main(verbosity=1)
