@@ -5,7 +5,7 @@ See `THREATS.md` (threat model + tests) and `PROMPTS.md` (AI use log).
 
 ## Run locally
 ```
-python3 test_ledgerline.py                                   # 33 tests incl. concurrency
+python3 test_ledgerline.py                                   # 40 tests incl. concurrency and HTTP
 ADMIN_TOKEN=<16+ chars> SEED_DEMO=1 python3 server.py        # API on :8000
 ADMIN_TOKEN=<same> python3 demo.py                           # guided demo (second terminal)
 ```
@@ -38,6 +38,10 @@ Seed data (only if `SEED_DEMO=1`): tokens `demo-alice-token` (holder, $1000.00),
 | POST | /transfers `{"from","to","amount"}` | owner of `from` |
 | GET | /audit?limit=N | admin/auditor |
 | GET | /reconcile | admin/auditor |
+| GET | /health | anyone: is the process up? (200, no database check) |
+| GET | /ready | anyone: 200 if the database works, 503 if not (no error details are returned) |
+
+**Health checks:** point your host's health check at `/ready` (it fails when the database is unreachable) and use `/health` for a plain "is it running" check. Neither needs a token and neither reveals internals.
 
 POST money endpoints **require** an `Idempotency-Key` header. Errors: 400 validation, 401 auth, 403 forbidden, 404, 409 key reuse, 422 insufficient funds.
 
