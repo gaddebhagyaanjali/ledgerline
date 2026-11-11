@@ -5,3 +5,12 @@ __pycache__/
 *.db-shm
 .venv/
 .vscode/
+
+.env
+.env.*
+!.env.example
+*.backup
+
+# Local SQLite backups
+*.sqlite
+*.sqlite3
