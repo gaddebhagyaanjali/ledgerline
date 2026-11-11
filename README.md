@@ -1,63 +1,276 @@
-# LedgerLine: money movement with a ledger you can prove
+# LedgerLine – Money Movement with a Verifiable Ledger
 
-Python 3 standard library + SQLite. No dependencies. **Live URL:** `<add after deploying>`
-See `THREATS.md` (threat model + tests) and `PROMPTS.md` (AI use log).
+LedgerLine is a lightweight ledger-based money movement application built with Python and SQLite. It demonstrates secure account management, role-based access control, double-entry bookkeeping, transaction integrity, audit logging, and reconciliation.
 
-## Run locally
+> **Important:** This is an educational demonstration project. It is not a production banking system or a real-money payment service.
+
+## Technology Stack
+
+- **Backend:** Python 3 standard library
+- **Database:** SQLite
+- **Frontend:** HTML, CSS, JavaScript
+- **Containerization:** Docker
+- **Testing:** Python unittest
+
+The application uses Python's standard library and SQLite. No third-party Python dependencies are required.
+
+## Features
+
+- User registration and account management
+- Role-based access control for holders, administrators, and auditors
+- Administrator approval and user status management
+- Double-entry ledger accounting
+- Deposits, withdrawals, and transfers
+- Idempotency protection for money movement requests
+- Prevention of overdrafts
+- Append-only transaction and audit records
+- Account balance reconciliation
+- Health and readiness endpoints
+- Docker container with a non-root application user
+- Persistent SQLite database storage through a Docker volume
+
+## Project Structure
+
+```text
+ledgerline/
+├── ledger.py
+├── server.py
+├── index.html
+├── bootstrap_admin.py
+├── demo.py
+├── test_ledgerline.py
+├── Dockerfile
+├── README.md
+├── THREATS.md
+└── PROMPTS.md
 ```
-python3 test_ledgerline.py                                   # 63 tests incl. concurrency, HTTP and the bootstrap script
-ADMIN_TOKEN=<16+ chars> SEED_DEMO=1 python3 server.py        # API on :8000
-ADMIN_TOKEN=<same> python3 demo.py                           # guided demo (second terminal)
+
+## Run Locally
+
+### 1. Run the test suite
+
+```bash
+python3 test_ledgerline.py
 ```
-Env vars: `ADMIN_TOKEN` (min 16 chars; defines the bootstrap administrator, no default), `ONBOARDING_MODE` (`auto` default: new holders can use the system at once; `manual`: an admin must approve each signup), `SEED_DEMO=1` (optional demo data), `PORT`, `LEDGER_DB`.
 
-**First administrator.** At start-up, if `ADMIN_TOKEN` is set, that administrator is created (or re-activated), and every *older* bootstrap administrator is disabled, so changing `ADMIN_TOKEN` really changes who can log in. You can also run `python3 bootstrap_admin.py` by hand: with `ADMIN_TOKEN` set it does the same (the token is never printed); without it, it creates the first administrator only if none exists and prints a generated token **once**.
+### 2. Start the application
 
-**Onboarding.** Every user has a status: `pending` (waiting for approval, can only call `/me`), `active`, or `disabled` (token revoked at once). Admins approve, disable and re-enable users; every change is audited. An older database file is upgraded in place on start-up.
+Set an administrator token containing at least 16 characters:
 
-## Dashboard
-Open `http://localhost:8000/` (or the live URL). Sign in with a token (or sign up as a holder) to see accounts, move money, view statements; auditors/admins also get reconcile and the audit log. It is a single static page (`index.html`) calling the same API; all data is rendered with `textContent` (no HTML injection) under a strict Content-Security-Policy.
+```bash
+export ADMIN_TOKEN="your-private-admin-token"
+export SEED_DEMO=1
+python3 server.py
+```
 
-## Roles
-| Role | Can | Cannot |
+The API and dashboard will be available at:
+
+`http://localhost:8000`
+
+### 3. Run the guided demo
+
+Open another terminal in the project directory:
+
+```bash
+ADMIN_TOKEN="your-private-admin-token" python3 demo.py
+```
+
+Use synthetic demo data only. Demo tokens must never be enabled on a real system.
+
+## Run with Docker
+
+### 1. Build the Docker image
+
+```bash
+docker build -t ledgerline-final .
+```
+
+### 2. Create a persistent database volume
+
+```bash
+docker volume create ledgerline-data
+```
+
+### 3. Generate an administrator token
+
+```bash
+export ADMIN_TOKEN="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+```
+
+Keep this token private. Do not commit it to GitHub or share it in screenshots.
+
+### 4. Bootstrap the administrator
+
+```bash
+docker run --rm \
+  -e ADMIN_TOKEN="$ADMIN_TOKEN" \
+  -e LEDGER_DB=/data/ledgerline.db \
+  -v ledgerline-data:/data \
+  ledgerline-final python bootstrap_admin.py
+```
+
+### 5. Start the application
+
+```bash
+docker run -d \
+  --name ledgerline-test \
+  -p 8001:8000 \
+  -e ONBOARDING_MODE=manual \
+  -v ledgerline-data:/data \
+  ledgerline-final
+```
+
+Open the dashboard:
+
+`http://localhost:8001`
+
+Sign in using the administrator token generated earlier.
+
+The Docker volume keeps the SQLite database separate from the container's writable filesystem, so the data can persist when the container is replaced, provided the volume is retained.
+
+### 6. Verify application health
+
+Check whether the application is running:
+
+```bash
+curl -i http://localhost:8001/health
+```
+
+Check whether the application and database are ready:
+
+```bash
+curl -i http://localhost:8001/ready
+```
+
+Inspect Docker health status:
+
+```bash
+docker inspect --format='{{.State.Health.Status}}' ledgerline-test
+```
+
+Expected responses:
+
+- `/health`: HTTP 200
+- `/ready`: HTTP 200 when the database is available
+- Docker health status: `healthy`
+
+## Configuration
+
+| Environment variable | Description |
+|---|---|
+| `ADMIN_TOKEN` | Administrator bootstrap token; minimum 16 characters |
+| `ONBOARDING_MODE` | `auto` or `manual`; defaults to `auto` |
+| `SEED_DEMO` | Set to `1` to load synthetic demo data |
+| `PORT` | HTTP server port; defaults to `8000` |
+| `LEDGER_DB` | SQLite database path |
+
+## User Roles and Permissions
+
+| Role | Permissions |
+|---|---|
+| **Holder** | Open accounts, view own balances and statements, withdraw and transfer from own accounts |
+| **Administrator** | Manage users, approve or disable accounts, fund holder accounts, view records and reconcile |
+| **Auditor** | Read all accounts, statements and audit records; run reconciliation |
+
+Administrators and auditors cannot withdraw or transfer customer funds through the holder money movement endpoints.
+
+## API Overview
+
+All authenticated requests use Bearer token authentication.
+
+| Method | Endpoint | Purpose |
 |---|---|---|
-| **holder** (public signup `POST /users`; needs approval first in `manual` mode) | open accounts; withdraw/transfer from **own** accounts; read own balance and statement | fund accounts, see others' accounts, audit log |
-| **admin** (from `ADMIN_TOKEN`) | fund account holders' accounts (deposits), create auditors/admins, approve/disable/re-enable users, read everything, reconcile | withdraw or transfer a customer's money; open or own accounts |
-| **auditor** (created by admin) | read every account, statement, audit log, reconcile | any write |
+| POST | `/users` | Register a holder |
+| POST | `/admin/users` | Create an administrator or auditor |
+| GET | `/admin/users?status=pending` | List pending users |
+| POST | `/admin/users/{id}/status` | Change user status |
+| POST | `/accounts` | Open an account |
+| GET | `/accounts` | List permitted accounts |
+| GET | `/accounts/{id}` | View account details |
+| GET | `/accounts/{id}/entries` | View account ledger entries |
+| POST | `/deposits` | Deposit funds |
+| POST | `/withdrawals` | Withdraw funds |
+| POST | `/transfers` | Transfer funds |
+| GET | `/audit` | View audit records |
+| GET | `/reconcile` | Reconcile ledger balances |
+| GET | `/health` | Check process health |
+| GET | `/ready` | Check application and database readiness |
 
-Seed data (only if `SEED_DEMO=1`): tokens `demo-alice-token` (holder, $1000.00), `demo-bob-token` (holder, $50.00), `demo-auditor-token`. These are public demo tokens, so never enable seeding on a real system.
+Money movement requests require an `Idempotency-Key` header.
 
-## API (Bearer token auth; amounts are integers in minor units, e.g. cents)
-| Method | Path | Who |
-|---|---|---|
-| POST | /users `{"display_name":"Pat"}` (name optional) | anyone: creates a holder (`active`, or `pending` in manual mode); token returned once |
-| POST | /admin/users `{"role":"auditor"}` | admin: create an auditor or admin |
-| GET | /admin/users?status=pending | admin: list users (never their tokens) |
-| POST | /admin/users/{id}/status `{"status":"active"\|"disabled"}` | admin: approve, disable or re-enable (not yourself) |
-| POST | /accounts `{"currency":"USD"}` | holder only |
-| GET | / | the dashboard (no auth) |
-| GET | /me | any signed-in user, even `pending`: your id, role, status, display name |
-| GET | /accounts | own accounts (holder) or all (admin/auditor) |
-| GET | /accounts/{id}, /accounts/{id}/entries | owner, admin, auditor |
-| POST | /deposits `{"account_id","amount"}` | admin, into a holder's account only |
-| POST | /withdrawals `{"account_id","amount"}` | account owner |
-| POST | /transfers `{"from","to","amount"}` | owner of `from` |
-| GET | /audit?limit=N | admin/auditor |
-| GET | /reconcile | admin/auditor |
-| GET | /health | anyone: is the process up? (200, no database check) |
-| GET | /ready | anyone: 200 if the database works, 503 if not (no error details are returned) |
+Amounts are represented as integer minor units, such as cents, to avoid floating-point rounding errors.
 
-**Health checks:** point your host's health check at `/ready` (it fails when the database is unreachable) and use `/health` for a plain "is it running" check. Neither needs a token and neither reveals internals.
+## Accounting and Security Design
 
-POST money endpoints **require** an `Idempotency-Key` header. Errors: 400 validation, 401 auth, 403 forbidden, 404, 409 key reuse, 422 insufficient funds.
+### Double-entry accounting
 
-## How it works
-- **Double-entry:** every transaction writes two signed entries that sum to zero. Money enters or leaves only via a per-currency system account. Cached balances are updated in the same DB transaction.
-- **No overdraft:** atomic `UPDATE ... WHERE balance >= amount`, plus a `CHECK (balance >= 0)` constraint.
-- **Idempotency:** key + request hash stored per user, with `UNIQUE(user_id, idem_key)`. Same request replays the stored result; a different request under the same key gives 409.
-- **Concurrency:** each money movement is one `BEGIN IMMEDIATE` transaction (writers serialised). On PostgreSQL this would be `SELECT ... FOR UPDATE` on both accounts in sorted-id order.
-- **Audit trail:** `entries`, `transactions` and `audit_log` are append-only (DB triggers reject UPDATE/DELETE). Rejected attempts are logged too.
-- **Proof:** `/reconcile` recomputes every balance from entries and checks that every transaction and the whole ledger sum to zero.
+Each transaction generates two signed ledger entries whose sum is zero. Money enters or leaves through a per-currency system account.
 
-## Limitations (honest list)
-An admin can still fund an account held by a second identity they control (deposits stand in for a payment gateway; there is no real external funding check). Dashboard is basic and was only tested by hand. Tokens do not expire and there is no rate limiting. SQLite single node; free hosting resets the database on restart. No reversals, pagination, or multi-currency FX. Audit log has no hash chain.
+### Overdraft prevention
+
+Balance updates use conditional SQL updates and database constraints to prevent accounts from becoming negative.
+
+### Idempotency
+
+Money movement requests use an idempotency key and request hash. Repeating the same request returns its stored result, while reusing a key for a different request is rejected.
+
+### Transaction concurrency
+
+Money movement operations use SQLite `BEGIN IMMEDIATE` transactions to serialize database writers.
+
+### Audit trail
+
+Ledger entries, transactions, and audit records are protected against updates and deletions through database triggers. Rejected attempts are also logged.
+
+### Reconciliation
+
+The reconciliation endpoint recomputes account balances from ledger entries and checks transaction and ledger balancing.
+
+### Administrator bootstrap
+
+Administrator bootstrap supports token-based creation and rotation. Older bootstrap administrators are disabled when a new administrator token is established.
+
+### Application security
+
+The application includes role-based authorization, bearer-token authentication, input validation, and a Content Security Policy with a hash-pinned script. Inline styles are permitted by the current policy.
+
+## Testing
+
+Run:
+
+```bash
+python3 test_ledgerline.py
+```
+
+The test suite currently contains **63 tests**, covering:
+
+- Ledger and transaction correctness
+- Authentication and authorization
+- Idempotency
+- Concurrent money movements
+- HTTP API behavior
+- Administrator bootstrap
+- Reconciliation
+
+## Limitations and Future Improvements
+
+LedgerLine is a demonstration implementation and has known limitations:
+
+- SQLite is intended for a single-node deployment in this implementation.
+- No external payment gateway or independent funding verification is integrated.
+- Administrator deposits are not backed by real payment verification.
+- Authentication tokens do not currently expire.
+- Rate limiting is not implemented.
+- The application does not implement transaction reversals, pagination, or foreign-exchange conversion.
+- The audit log does not use a cryptographic hash chain.
+- The dashboard has received manual testing; automated browser testing is not included.
+- Persistent storage must be configured by the deployment host. Temporary or ephemeral hosting storage can result in data loss.
+
+## Project Documentation
+
+- `THREATS.md` – Threat model, security considerations, and related tests.
+- `PROMPTS.md` – AI assistance and development activity log.
+
+## Disclaimer
+
+LedgerLine is developed for learning, demonstration, and software engineering assessment purposes. Use synthetic data only. It is not intended to process real customer funds or replace a regulated financial system.
