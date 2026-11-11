@@ -34,10 +34,11 @@ Tool: Claude (Anthropic), in the chat interface. I kept this log as I worked.
 - **What I did instead:** I used `python3`, set my git name and email, and committed again.
 
 ## Entry 6: 2026-11-08
+
 - **What I asked:** How to put my project on GitHub.
-- **What the tool produced:** Advice to make the repo public.
-- **What was wrong:** The assessment says not to make it public before the deadline.
-- **What I did instead:** After I pasted the rules, Claude said its advice was wrong. I made the repo private and plan to ask my placement cell about public versus private.
+- **What the tool produced:** Advice to make the repository public.
+- **What was wrong:** The assessment instructions appeared to say not to make the repository public before the deadline.
+- **What I did instead:** I questioned the advice and reviewed the assessment instructions. The repository is currently public, so I need to confirm the visibility requirement with my placement cell before submission.
 
 ## Entry 7: 2026-11-08
 - **What I asked:** After one 5.00 transfer in the dashboard, the balances did not match what I expected, and I asked Claude why.
@@ -65,7 +66,7 @@ Tool: Claude (Anthropic), in the chat interface. I kept this log as I worked.
 
 ## Entry 11: 2026-11-11
 - **What I asked:** Add user onboarding workflows (`pending`, `active`, `disabled`), public registration with display names, and administrative user controls to approve or revoke users.
-- **What the tool produced:** Database migration for user status, API endpoints `GET /admin/users` and `POST /admin/users/{id}/status`, and `ONBOARDING_MODE` (`auto` or `manual`).
+- **What the tool produced:** SQLite database schema update for user status, API endpoints `GET /admin/users` and `POST /admin/users/{id}/status`, and `ONBOARDING_MODE` (`auto` or `manual`).
 - **What was wrong (user experience & security):** Newly registered pending users in manual mode received generic 401 unauthenticated errors instead of a clear pending approval state, and administrators could inadvertently disable their own account.
 - **What I did instead:** Allowed pending users to call `/me` to inspect their status while blocking all financial operations with 403, prevented admins from disabling themselves, added comprehensive audit logging for all status changes, and built a User Management & Onboarding panel in `index.html`. Total automated tests expanded to 63. Commit `54c005a`.
 
