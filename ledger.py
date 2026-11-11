@@ -14,11 +14,15 @@ class InsufficientFunds(LedgerError): status, code = 422, "insufficient_funds"
 
 MAX_AMOUNT = 10**12   # minor units; stops overflow and absurd requests
 ROLES = ("admin", "holder", "auditor")
+USER_STATUSES = ("pending", "active", "disabled")
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users(
   id TEXT PRIMARY KEY, token_hash TEXT UNIQUE NOT NULL,
-  role TEXT NOT NULL DEFAULT 'holder' CHECK (role IN ('admin','holder','auditor')));
+  role TEXT NOT NULL DEFAULT 'holder' CHECK (role IN ('admin','holder','auditor')),
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('pending','active','disabled')),
+  display_name TEXT,
+  origin TEXT NOT NULL DEFAULT 'signup');          -- signup | admin | bootstrap | seed
 CREATE TABLE IF NOT EXISTS accounts(
   id TEXT PRIMARY KEY,
   owner_id TEXT REFERENCES users(id),          -- NULL for system accounts
@@ -66,6 +70,19 @@ class Ledger:
     def __init__(self, path="ledgerline.db"):
         self.path = path
         c = self._conn(); c.executescript(SCHEMA); c.close()
+        self._migrate()
+
+    def _migrate(self):
+        """Upgrade a database created by an older version in place (adds the onboarding columns)."""
+        c = self._conn()
+        try:
+            cols = {r["name"] for r in c.execute("PRAGMA table_info(users)")}
+            if "status" not in cols: c.execute("ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'active'")
+            if "display_name" not in cols: c.execute("ALTER TABLE users ADD COLUMN display_name TEXT")
+            if "origin" not in cols:
+                c.execute("ALTER TABLE users ADD COLUMN origin TEXT NOT NULL DEFAULT 'signup'")
+                c.execute("UPDATE users SET origin='bootstrap' WHERE role='admin'")   # old versions only made admins at bootstrap
+        finally: c.close()
 
     def _conn(self):
         c = sqlite3.connect(self.path, timeout=30, isolation_level=None)
@@ -76,22 +93,41 @@ class Ledger:
 
     # ---------- identity & roles ----------
     def _role(self, c, user_id):
-        r = c.execute("SELECT role FROM users WHERE id=?", (user_id,)).fetchone()
+        """Role of an ACTIVE user. Pending users must wait for approval; disabled users are treated as signed out."""
+        r = c.execute("SELECT role, status FROM users WHERE id=?", (user_id,)).fetchone()
         if not r: raise Unauthenticated("unknown user")
+        if r["status"] == "pending": raise Forbidden("your account is waiting for administrator approval")
+        if r["status"] == "disabled": raise Unauthenticated("this account has been disabled")
         return r["role"]
 
-    def create_user(self, role="holder", token=None):
+    @staticmethod
+    def _check_display_name(name):
+        if name is None: return None
+        if not isinstance(name, str) or not (1 <= len(name.strip()) <= 60):
+            raise ValidationError("display_name must be 1-60 characters")
+        return name.strip()
+
+    def create_user(self, role="holder", token=None, status="active", display_name=None, origin="signup"):
         if role not in ROLES: raise ValidationError("role must be admin, holder or auditor")
+        if status not in ("pending", "active"): raise ValidationError("a new user is either pending or active")
+        name = self._check_display_name(display_name)
         uid, token = _id(), token or secrets.token_urlsafe(32)
         c = self._conn()
         try:
-            c.execute("INSERT INTO users(id,token_hash,role) VALUES(?,?,?)", (uid, _h(token), role))
+            c.execute("INSERT INTO users(id,token_hash,role,status,display_name,origin) VALUES(?,?,?,?,?,?)",
+                      (uid, _h(token), role, status, name, origin))
         finally: c.close()
-        return {"user_id": uid, "role": role, "token": token}   # token shown once; only hash stored
+        self._audit(uid, "signup" if origin == "signup" else "create_user", None, f"{role}:{status}", "completed")
+        return {"user_id": uid, "role": role, "status": status, "token": token}   # token shown once; only hash stored
 
     def whoami(self, user_id):
+        """Who am I? Works for pending users too, so the dashboard can say "waiting for approval"."""
         c = self._conn()
-        try: return {"user_id": user_id, "role": self._role(c, user_id)}
+        try:
+            r = c.execute("SELECT role, status, display_name FROM users WHERE id=?", (user_id,)).fetchone()
+            if not r: raise Unauthenticated("unknown user")
+            if r["status"] == "disabled": raise Unauthenticated("this account has been disabled")
+            return {"user_id": user_id, "role": r["role"], "status": r["status"], "display_name": r["display_name"]}
         finally: c.close()
 
     def readiness(self):
@@ -112,26 +148,106 @@ class Ledger:
             try:
                 if self._role(c, actor_id) != "admin": raise Forbidden("administrators only")
             finally: c.close()
-            return self.create_user(role)
+            return self.create_user(role, origin="admin")
 
-    def ensure_user(self, token, role):
-        """Bootstrap helper: create the user for this token if it does not exist yet."""
+    def ensure_user(self, token, role, origin="seed"):
+        """Demo-seeding helper: create the user for this token if it does not exist yet."""
         c = self._conn()
         try:
             r = c.execute("SELECT id FROM users WHERE token_hash=?", (_h(token),)).fetchone()
         finally: c.close()
-        return r["id"] if r else self.create_user(role, token)["user_id"]
+        return r["id"] if r else self.create_user(role, token, origin=origin)["user_id"]
+
+    # ---------- user management (administrators only) ----------
+    def list_users(self, actor_id, status=None, limit=200):
+        """List users (never their tokens). Optionally only one status, e.g. "pending"."""
+        with self._audited(actor_id, "list_users", str(status)[:20] if status else ""):
+            if status is not None and status not in USER_STATUSES:
+                raise ValidationError("status must be pending, active or disabled")
+            c = self._conn()
+            try:
+                if self._role(c, actor_id) != "admin": raise Forbidden("administrators only")
+                limit = max(1, min(int(limit), 500))
+                q, args = "SELECT id,role,status,display_name,origin FROM users", []
+                if status: q += " WHERE status=?"; args.append(status)
+                rows = c.execute(q + " ORDER BY rowid LIMIT ?", args + [limit]).fetchall()
+                return [{"user_id": r["id"], "role": r["role"], "status": r["status"],
+                         "display_name": r["display_name"], "origin": r["origin"]} for r in rows]
+            finally: c.close()
+
+    def set_user_status(self, actor_id, target_id, new_status):
+        """Approve (pending->active), disable (revokes the token at once) or re-enable a user."""
+        with self._audited(actor_id, "set_user_status", f"{str(target_id)[:32]}->{str(new_status)[:10]}"):
+            c = self._conn()
+            try:
+                c.execute("BEGIN IMMEDIATE")
+                if self._role(c, actor_id) != "admin": raise Forbidden("administrators only")
+                if new_status not in ("active", "disabled"): raise ValidationError("status must be active or disabled")
+                if target_id == actor_id: raise Forbidden("you cannot change your own status")
+                t = c.execute("SELECT status FROM users WHERE id=?", (target_id,)).fetchone()
+                if not t: raise NotFound("user not found")
+                changed = t["status"] != new_status
+                if changed:
+                    c.execute("UPDATE users SET status=? WHERE id=?", (new_status, target_id))
+                    c.execute("INSERT INTO audit_log(ts,user_id,action,idem_key,detail,outcome) VALUES(?,?,?,?,?,?)",
+                              (time.time(), actor_id, "set_user_status", None,
+                               f"{target_id}:{t['status']}->{new_status}", "completed"))
+                c.execute("COMMIT")
+                return {"user_id": target_id, "status": new_status, "changed": changed}
+            except BaseException:
+                if c.in_transaction: c.execute("ROLLBACK")
+                raise
+            finally: c.close()
+
+    # ---------- first administrator ----------
+    def has_active_admin(self):
+        c = self._conn()
+        try: return c.execute("SELECT 1 FROM users WHERE role='admin' AND status='active' LIMIT 1").fetchone() is not None
+        finally: c.close()
+
+    def bootstrap_admin(self, token):
+        """Make sure the bootstrap administrator for this token exists and is active, and revoke every OLDER
+        bootstrap administrator, so changing ADMIN_TOKEN really changes who can log in."""
+        if not isinstance(token, str) or len(token) < 16:
+            raise ValidationError("admin token must be at least 16 characters")
+        th = _h(token)
+        c = self._conn()
+        try:
+            c.execute("BEGIN IMMEDIATE")
+            row = c.execute("SELECT id, role FROM users WHERE token_hash=?", (th,)).fetchone()
+            created = row is None
+            if created:
+                uid = _id()
+                c.execute("INSERT INTO users(id,token_hash,role,status,origin) VALUES(?,?,?,?,?)",
+                          (uid, th, "admin", "active", "bootstrap"))
+            else:
+                if row["role"] != "admin": raise ValidationError("that token already belongs to a non-admin user")
+                uid = row["id"]
+                c.execute("UPDATE users SET status='active' WHERE id=?", (uid,))     # lets you recover from a lock-out
+            revoked = c.execute("UPDATE users SET status='disabled' WHERE origin='bootstrap' AND token_hash<>? "
+                                "AND status<>'disabled'", (th,)).rowcount
+            c.execute("INSERT INTO audit_log(ts,user_id,action,idem_key,detail,outcome) VALUES(?,?,?,?,?,?)",
+                      (time.time(), uid, "bootstrap_admin", None, f"created={created} revoked={revoked}", "completed"))
+            c.execute("COMMIT")
+            return {"user_id": uid, "created": created, "revoked": revoked}
+        except BaseException:
+            if c.in_transaction: c.execute("ROLLBACK")
+            raise
+        finally: c.close()
 
     def authenticate(self, token):
         if not token:
             self._audit(None, "authenticate", None, "no token supplied", "rejected:unauthenticated")
             raise Unauthenticated("missing token")
         c = self._conn()
-        r = c.execute("SELECT id FROM users WHERE token_hash=?", (_h(token),)).fetchone()
+        r = c.execute("SELECT id, status FROM users WHERE token_hash=?", (_h(token),)).fetchone()
         c.close()
         if not r:
             self._audit(None, "authenticate", None, "token_hash:" + _h(token)[:8], "rejected:unauthenticated")
             raise Unauthenticated("invalid token")
+        if r["status"] == "disabled":
+            self._audit(r["id"], "authenticate", None, "disabled account", "rejected:unauthenticated")
+            raise Unauthenticated("this account has been disabled")
         return r["id"]
 
     def create_account(self, user_id, currency):

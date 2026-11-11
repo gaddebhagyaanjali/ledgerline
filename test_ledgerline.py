@@ -1,4 +1,4 @@
-import json, os, tempfile, sqlite3, threading, unittest, urllib.error, urllib.request
+import json, os, subprocess, sys, tempfile, sqlite3, threading, unittest, urllib.error, urllib.request
 from ledger import *
 
 class T(unittest.TestCase):
@@ -235,6 +235,120 @@ class T(unittest.TestCase):
         r = self.fund(self.a, 1234)
         self.assertEqual((r["status"], self.bal(self.alice, self.a)), ("completed", 1234))
 
+    # ---- onboarding, user management, token revocation, first admin
+    def _new_user(self, **kw): return self.L.create_user("holder", **kw)
+
+    def test_pending_user_cannot_use_the_system_until_approved(self):
+        u = self._new_user(status="pending", display_name="Pat")
+        self.assertEqual(self.L.whoami(u["user_id"])["status"], "pending")      # can still ask "who am I"
+        for attempt in (lambda: self.L.create_account(u["user_id"], "USD"),
+                        lambda: self.L.list_accounts(u["user_id"]),
+                        lambda: self.L.get_account(u["user_id"], self.a)):
+            with self.assertRaises(Forbidden): attempt()
+        self.L.set_user_status(self.admin, u["user_id"], "active")
+        self.assertEqual(self.L.create_account(u["user_id"], "USD")["balance"], 0)
+
+    def test_only_admins_can_list_users_or_change_status(self):
+        for who in (self.alice, self.auditor):
+            with self.assertRaises(Forbidden): self.L.list_users(who)
+            with self.assertRaises(Forbidden): self.L.set_user_status(who, self.bob, "disabled")
+        self.assertEqual(self.L.whoami(self.bob)["status"], "active")
+        self.assertEqual(self._audit_rows(1)[0]["outcome"], "rejected:forbidden")
+
+    def test_disabled_user_loses_access_immediately(self):
+        u = self._new_user()
+        self.assertEqual(self.L.authenticate(u["token"]), u["user_id"])
+        self.assertTrue(self.L.set_user_status(self.admin, u["user_id"], "disabled")["changed"])
+        with self.assertRaises(Unauthenticated): self.L.authenticate(u["token"])        # the token is revoked
+        with self.assertRaises(Unauthenticated): self.L.whoami(u["user_id"])
+        with self.assertRaises(Unauthenticated): self.L.create_account(u["user_id"], "USD")
+        row = next(r for r in self._audit_rows(10) if r["action"] == "authenticate")
+        self.assertEqual((row["user_id"], row["detail"]), (u["user_id"], "disabled account"))
+
+    def test_disabled_user_with_money_cannot_move_it(self):
+        u = self._new_user(); acct = self.L.create_account(u["user_id"], "USD")["account_id"]
+        self.fund(acct, 500)
+        self.L.set_user_status(self.admin, u["user_id"], "disabled")
+        with self.assertRaises(Unauthenticated): self.L.withdraw(u["user_id"], "w", acct, 100)
+        with self.assertRaises(Unauthenticated): self.L.transfer(u["user_id"], "t", acct, self.b, 100)
+        self.assertEqual(self.L.get_account(self.admin, acct)["balance"], 500)
+        self.assertTrue(self.L.reconcile(self.auditor)["ok"])
+
+    def test_admin_can_reenable_a_user(self):
+        u = self._new_user(); self.L.set_user_status(self.admin, u["user_id"], "disabled")
+        self.L.set_user_status(self.admin, u["user_id"], "active")
+        self.assertEqual(self.L.authenticate(u["token"]), u["user_id"])
+
+    def test_admin_cannot_change_their_own_status(self):
+        with self.assertRaises(Forbidden): self.L.set_user_status(self.admin, self.admin, "disabled")
+        self.assertEqual(self.L.whoami(self.admin)["status"], "active")
+
+    def test_user_status_input_is_validated(self):
+        for bad in ("pending", "root", None, 5):
+            with self.assertRaises(ValidationError): self.L.set_user_status(self.admin, self.alice, bad)
+        with self.assertRaises(NotFound): self.L.set_user_status(self.admin, "no-such-user", "disabled")
+        with self.assertRaises(ValidationError): self.L.list_users(self.admin, status="bogus")
+
+    def test_status_changes_and_signups_are_audited(self):
+        u = self._new_user(display_name="Lee")
+        self.assertEqual((self._audit_rows(1)[0]["action"], self._audit_rows(1)[0]["outcome"]), ("signup", "completed"))
+        self.L.set_user_status(self.admin, u["user_id"], "disabled")
+        row = self._audit_rows(1)[0]
+        self.assertEqual((row["action"], row["user_id"], row["outcome"]), ("set_user_status", self.admin, "completed"))
+        self.assertEqual(row["detail"], u["user_id"] + ":active->disabled")
+
+    def test_list_users_filters_and_never_shows_tokens(self):
+        u = self._new_user(status="pending", display_name="Pat")
+        rows = self.L.list_users(self.admin, status="pending")
+        self.assertEqual([(r["user_id"], r["display_name"], r["status"]) for r in rows], [(u["user_id"], "Pat", "pending")])
+        self.assertEqual(set(rows[0]), {"user_id", "role", "status", "display_name", "origin"})
+        self.assertNotIn(u["token"], str(self.L.list_users(self.admin)))
+
+    def test_display_name_is_validated(self):
+        for bad in ("", "   ", "x" * 61, 12, ["a"]):
+            with self.assertRaises(ValidationError): self._new_user(display_name=bad)
+
+    def test_bootstrap_admin_creates_once_and_is_repeatable(self):
+        tok = "bootstrap-token-0123456789"
+        r1, r2 = self.L.bootstrap_admin(tok), self.L.bootstrap_admin(tok)
+        self.assertEqual((r1["created"], r2["created"], r1["user_id"] == r2["user_id"]), (True, False, True))
+        self.assertEqual(self.L.whoami(self.L.authenticate(tok))["role"], "admin")
+
+    def test_changing_the_bootstrap_token_revokes_the_old_one(self):
+        old, new = "old-bootstrap-token-0123456", "new-bootstrap-token-0123456"
+        self.L.bootstrap_admin(old)
+        other = self.L.admin_create_user(self.admin, "admin")          # an ordinary admin, not a bootstrap one
+        self.assertEqual(self.L.bootstrap_admin(new)["revoked"], 1)
+        with self.assertRaises(Unauthenticated): self.L.authenticate(old)
+        self.assertTrue(self.L.authenticate(new)); self.assertTrue(self.L.authenticate(other["token"]))
+
+    def test_bootstrap_admin_can_recover_a_locked_out_admin(self):
+        tok = "bootstrap-token-0123456789"; uid = self.L.bootstrap_admin(tok)["user_id"]
+        self.L.set_user_status(self.admin, uid, "disabled")
+        with self.assertRaises(Unauthenticated): self.L.authenticate(tok)
+        self.L.bootstrap_admin(tok)
+        self.assertEqual(self.L.authenticate(tok), uid)
+
+    def test_bootstrap_refuses_short_tokens_and_non_admin_tokens(self):
+        self._new_user(token="holder-token-0123456789")
+        with self.assertRaises(ValidationError): self.L.bootstrap_admin("holder-token-0123456789")
+        with self.assertRaises(ValidationError): self.L.bootstrap_admin("short")
+
+    def test_old_database_is_upgraded_in_place(self):
+        path = tempfile.mktemp(suffix=".db"); c = sqlite3.connect(path)
+        c.execute("CREATE TABLE users(id TEXT PRIMARY KEY, token_hash TEXT UNIQUE NOT NULL, role TEXT NOT NULL "
+                  "DEFAULT 'holder' CHECK (role IN ('admin','holder','auditor')))")
+        c.execute("INSERT INTO users VALUES('u1','h1','admin')"); c.execute("INSERT INTO users VALUES('u2','h2','holder')")
+        c.commit(); c.close()
+        Ledger(path); Ledger(path)                                         # second open must not fail either
+        c = sqlite3.connect(path)
+        cols = {r[1] for r in c.execute("PRAGMA table_info(users)")}
+        rows = dict(c.execute("SELECT id, status || ':' || origin FROM users").fetchall()); c.close()
+        for suffix in ("", "-wal", "-shm"):
+            if os.path.exists(path + suffix): os.remove(path + suffix)
+        self.assertTrue({"status", "display_name", "origin"} <= cols)
+        self.assertEqual(rows, {"u1": "active:bootstrap", "u2": "active:signup"})
+
 
 class HttpTests(unittest.TestCase):
     """Tests through the real HTTP server (a second layer of defence: the API itself, not just ledger.py)."""
@@ -258,7 +372,9 @@ class HttpTests(unittest.TestCase):
         req = urllib.request.Request(f"http://127.0.0.1:{self.port}{path}", data=data, method=method, headers=headers or {})
         try:
             with urllib.request.urlopen(req, timeout=10) as r: return r.status, r.read(), r.headers
-        except urllib.error.HTTPError as e: return e.code, e.read(), e.headers
+        except urllib.error.HTTPError as e:
+            body = e.read(); e.close()
+            return e.code, body, e.headers
 
     def test_health_is_public_and_ok(self):
         status, body, _ = self.call("GET", "/health")
@@ -300,6 +416,81 @@ class HttpTests(unittest.TestCase):
         token = self.srv.L.create_user("admin")["token"]
         status, _, _ = self.call("POST", "/deposits", b"{bad", {"Authorization": "Bearer " + token, "Idempotency-Key": "k1"})
         self.assertEqual(status, 400)
+
+
+    def jcall(self, method, path, body=None, token=None, key=None):
+        headers = {"Content-Type": "application/json"}
+        if token: headers["Authorization"] = "Bearer " + token
+        if key: headers["Idempotency-Key"] = key
+        status, raw, _ = self.call(method, path, json.dumps(body).encode() if body is not None else None, headers)
+        return status, json.loads(raw or b"{}")
+
+    def _signup(self, mode, name):
+        old, self.srv.ONBOARDING = self.srv.ONBOARDING, mode
+        try: return self.jcall("POST", "/users", {"display_name": name})
+        finally: self.srv.ONBOARDING = old
+
+    def test_manual_onboarding_signup_waits_for_admin_approval(self):
+        admin = self.srv.L.create_user("admin")["token"]
+        status, new = self._signup("manual", "Pat")
+        self.assertEqual((status, new["status"]), (201, "pending"))
+        self.assertEqual(self.jcall("GET", "/me", token=new["token"])[1]["status"], "pending")
+        self.assertEqual(self.jcall("POST", "/accounts", {"currency": "USD"}, new["token"])[0], 403)
+        _, pending = self.jcall("GET", "/admin/users?status=pending", token=admin)
+        self.assertIn(new["user_id"], [u["user_id"] for u in pending])
+        self.assertEqual(self.jcall("POST", f"/admin/users/{new['user_id']}/status", {"status": "active"}, admin)[0], 200)
+        self.assertEqual(self.jcall("POST", "/accounts", {"currency": "USD"}, new["token"])[0], 201)
+
+    def test_auto_onboarding_signup_is_active_at_once(self):
+        status, new = self._signup("auto", "Sam")
+        self.assertEqual((status, new["status"]), (201, "active"))
+        self.assertEqual(self.jcall("POST", "/accounts", {"currency": "USD"}, new["token"])[0], 201)
+
+    def test_user_admin_endpoints_need_the_admin_role(self):
+        holder, other = self.srv.L.create_user("holder"), self.srv.L.create_user("holder")
+        self.assertEqual(self.jcall("GET", "/admin/users", token=holder["token"])[0], 403)
+        self.assertEqual(self.jcall("POST", f"/admin/users/{other['user_id']}/status", {"status": "disabled"}, holder["token"])[0], 403)
+        self.assertEqual(self.jcall("GET", "/admin/users")[0], 401)
+
+    def test_disabled_user_gets_401_over_http(self):
+        admin, user = self.srv.L.create_user("admin")["token"], self.srv.L.create_user("holder")
+        self.assertEqual(self.jcall("GET", "/me", token=user["token"])[0], 200)
+        self.assertEqual(self.jcall("POST", f"/admin/users/{user['user_id']}/status", {"status": "disabled"}, admin)[0], 200)
+        self.assertEqual(self.jcall("GET", "/me", token=user["token"])[0], 401)
+        self.assertEqual(self.jcall("GET", "/accounts", token=user["token"])[0], 401)
+
+    def test_signup_rejects_a_bad_display_name(self):
+        self.assertEqual(self._signup("auto", "x" * 100)[0], 400)
+
+class BootstrapScriptTests(unittest.TestCase):
+    """bootstrap_admin.py run as a real command, the way an operator would run it."""
+    script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bootstrap_admin.py")
+
+    def setUp(self): self.db = tempfile.mktemp(suffix=".db")
+    def tearDown(self):
+        for suffix in ("", "-wal", "-shm"):
+            if os.path.exists(self.db + suffix): os.remove(self.db + suffix)
+
+    def run_script(self, **env):
+        e = {k: v for k, v in os.environ.items() if k != "ADMIN_TOKEN"}
+        e["LEDGER_DB"] = self.db; e.update(env)
+        return subprocess.run([sys.executable, self.script], env=e, capture_output=True, text=True, timeout=60)
+
+    def test_first_run_prints_a_generated_token_once(self):
+        r = self.run_script(); self.assertEqual(r.returncode, 0)
+        token = r.stdout.strip().splitlines()[-1]
+        led = Ledger(self.db); self.assertEqual(led.whoami(led.authenticate(token))["role"], "admin")
+        again = self.run_script()
+        self.assertEqual(again.returncode, 0); self.assertIn("already exists", again.stdout)
+        self.assertNotIn(token, again.stdout + again.stderr)
+
+    def test_token_from_environment_is_used_but_never_printed(self):
+        tok = "env-admin-token-0123456789"; r = self.run_script(ADMIN_TOKEN=tok)
+        self.assertEqual(r.returncode, 0); self.assertNotIn(tok, r.stdout + r.stderr)
+        led = Ledger(self.db); self.assertEqual(led.whoami(led.authenticate(tok))["role"], "admin")
+
+    def test_a_short_admin_token_is_rejected(self):
+        self.assertNotEqual(self.run_script(ADMIN_TOKEN="short").returncode, 0)
 
 
 if __name__ == "__main__": unittest.main(verbosity=1)

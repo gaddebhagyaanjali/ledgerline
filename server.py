@@ -7,9 +7,11 @@ from ledger import Ledger, LedgerError, ValidationError
 
 L = Ledger(os.environ.get("LEDGER_DB", "ledgerline.db"))
 MAX_BODY = 16 * 1024
+ONBOARDING = os.environ.get("ONBOARDING_MODE", "auto")   # "auto": signups are active at once; "manual": an admin must approve
 
 def _load_page():
-    html = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "index.html"), "rb").read()
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "index.html"), "rb") as f:
+        html = f.read()
     js = re.search(rb"<script>(.*?)</script>", html, re.S).group(1)
     digest = base64.b64encode(hashlib.sha256(js).digest()).decode()
     csp = ("default-src 'none'; script-src 'sha256-%s'; style-src 'unsafe-inline'; connect-src 'self'; "
@@ -18,12 +20,17 @@ def _load_page():
 PAGE, PAGE_CSP = _load_page()
 
 def bootstrap():
+    if ONBOARDING not in ("auto", "manual"):
+        sys.exit('ONBOARDING_MODE must be "auto" or "manual"')
     tok = os.environ.get("ADMIN_TOKEN", "")
     if not tok:
-        print("WARNING: ADMIN_TOKEN not set: no administrator exists, deposits are impossible."); return
+        print("WARNING: ADMIN_TOKEN not set: no new administrator is created (run bootstrap_admin.py to make one).")
+        return
     if len(tok) < 16:
         sys.exit("ADMIN_TOKEN must be at least 16 characters")
-    admin_id = L.ensure_user(tok, "admin")
+    result = L.bootstrap_admin(tok)
+    print("Administrator", "created" if result["created"] else "ready", "| older bootstrap admins revoked:", result["revoked"])
+    admin_id = result["user_id"]
     if os.environ.get("SEED_DEMO") == "1":
         L.seed_demo(admin_id); print("Demo data seeded (demo-alice-token, demo-bob-token, demo-auditor-token).")
 
@@ -74,11 +81,20 @@ class H(BaseHTTPRequestHandler):
                 return self._send(200 if ok else 503, {"status": "ready" if ok else "not_ready",
                                                        "checks": {k: "ok" if v else "error" for k, v in checks.items()}})
             if method == "POST" and p == "/users":          # public signup: account holders only
-                return self._send(201, L.create_user("holder"))
+                name = self._body().get("display_name")
+                return self._send(201, L.create_user("holder", display_name=name,
+                                                     status="pending" if ONBOARDING == "manual" else "active"))
             u = self._user()
             key = self.headers.get("Idempotency-Key")
             if method == "GET" and p == "/me":
                 return self._send(200, L.whoami(u))
+            if method == "GET" and p == "/admin/users":
+                q = parse_qs(sp.query); lim = q.get("limit", ["200"])[0]
+                if not lim.isdigit(): raise ValidationError("limit must be a number")
+                return self._send(200, L.list_users(u, q.get("status", [None])[0], int(lim)))
+            m = re.fullmatch(r"/admin/users/(\w+)/status", p)
+            if method == "POST" and m:
+                return self._send(200, L.set_user_status(u, m[1], self._body().get("status")))
             if method == "POST" and p == "/admin/users":
                 return self._send(201, L.admin_create_user(u, self._body().get("role")))
             if method == "POST" and p == "/accounts":

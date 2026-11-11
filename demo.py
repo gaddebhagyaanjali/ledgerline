@@ -1,5 +1,5 @@
 """Live demo.  ADMIN_TOKEN=<your admin token> python3 demo.py [BASE_URL]
-Shows roles, idempotency, overdraft/ownership protection, auditor oversight and reconcile."""
+Shows roles, onboarding, idempotency, overdraft/ownership protection, user administration, auditor oversight and reconcile."""
 import json, os, sys, urllib.request, urllib.error
 BASE = (sys.argv[1] if len(sys.argv) > 1 else "http://localhost:8000").rstrip("/")
 ADMIN = os.environ.get("ADMIN_TOKEN")
@@ -20,20 +20,31 @@ def step(title, res):
     if sys.stdin.isatty(): input("    [press Enter]")
     return res[1]
 
-alice = step("1. Alice signs up (public signup = account holder)", call("POST", "/users"))
-bob = step("2. Bob signs up", call("POST", "/users"))
-a = step("3. Alice opens a USD account", call("POST", "/accounts", {"currency": "USD"}, alice["token"]))["account_id"]
-b = step("4. Bob opens a USD account", call("POST", "/accounts", {"currency": "USD"}, bob["token"]))["account_id"]
-step("5. Alice tries to give herself money -> FORBIDDEN (only admins fund accounts)", call("POST", "/deposits", {"account_id": a, "amount": 10000}, alice["token"], "self-1"))
-step("6. Admin funds Alice $100.00 (10000 cents)", call("POST", "/deposits", {"account_id": a, "amount": 10000}, ADMIN, "dep-1"))
-step("7. SAME request again (network retry) -> replayed, NOT paid twice", call("POST", "/deposits", {"account_id": a, "amount": 10000}, ADMIN, "dep-1"))
-step("8. Same key, different amount -> 409", call("POST", "/deposits", {"account_id": a, "amount": 99999}, ADMIN, "dep-1"))
-step("9. Alice balance is still 10000", call("GET", f"/accounts/{a}", token=alice["token"]))
-step("10. Alice transfers $30.00 to Bob", call("POST", "/transfers", {"from": a, "to": b, "amount": 3000}, alice["token"], "tr-1"))
-step("11. Alice overdraws -> 422 insufficient funds", call("POST", "/withdrawals", {"account_id": a, "amount": 999999}, alice["token"], "wd-1"))
-step("12. Bob tries to move Alice's money -> 403", call("POST", "/transfers", {"from": a, "to": b, "amount": 100}, bob["token"], "evil-1"))
-aud = step("13. Admin creates an auditor", call("POST", "/admin/users", {"role": "auditor"}, ADMIN))
-step("14. Auditor reads Alice's statement (every entry traceable)", call("GET", f"/accounts/{a}/entries", token=aud["token"]))
-step("15. Auditor tries to move money -> 403 (read-only)", call("POST", "/withdrawals", {"account_id": a, "amount": 1}, aud["token"], "aud-1"))
-step("16. Auditor reads the audit log (includes rejected attempts)", call("GET", "/audit?limit=5", token=aud["token"]))
-step("17. Reconcile: prove the books balance", call("GET", "/reconcile", token=aud["token"]))
+alice = step("1. Alice signs up with display name", call("POST", "/users", {"display_name": "Alice"}))
+bob = step("2. Bob signs up with display name", call("POST", "/users", {"display_name": "Bob"}))
+step("3. Alice checks identity (/me)", call("GET", "/me", token=alice["token"]))
+a = step("4. Alice opens a USD account", call("POST", "/accounts", {"currency": "USD"}, alice["token"]))["account_id"]
+b = step("5. Bob opens a USD account", call("POST", "/accounts", {"currency": "USD"}, bob["token"]))["account_id"]
+step("6. Alice tries to give herself money -> FORBIDDEN (only admins fund accounts)", call("POST", "/deposits", {"account_id": a, "amount": 10000}, alice["token"], "self-1"))
+step("7. Admin funds Alice $100.00 (10000 cents)", call("POST", "/deposits", {"account_id": a, "amount": 10000}, ADMIN, "dep-1"))
+step("8. SAME request again (network retry) -> replayed, NOT paid twice", call("POST", "/deposits", {"account_id": a, "amount": 10000}, ADMIN, "dep-1"))
+step("9. Same key, different amount -> 409 Conflict", call("POST", "/deposits", {"account_id": a, "amount": 99999}, ADMIN, "dep-1"))
+step("10. Alice balance is still 10000 ($100.00)", call("GET", f"/accounts/{a}", token=alice["token"]))
+step("11. Alice transfers $30.00 to Bob", call("POST", "/transfers", {"from": a, "to": b, "amount": 3000}, alice["token"], "tr-1"))
+step("12. Alice overdraws -> 422 insufficient funds", call("POST", "/withdrawals", {"account_id": a, "amount": 999999}, alice["token"], "wd-1"))
+step("13. Bob tries to move Alice's money -> 403 Forbidden", call("POST", "/transfers", {"from": a, "to": b, "amount": 100}, bob["token"], "evil-1"))
+
+# User Management & Status Lifecycle
+step("14. Admin inspects user directory (/admin/users)", call("GET", "/admin/users", token=ADMIN))
+step("15. Admin disables Bob's account (e.g. security hold)", call("POST", f"/admin/users/{bob['user_id']}/status", {"status": "disabled"}, ADMIN))
+step("16. Bob tries to use API while disabled -> 401 Unauthenticated", call("GET", "/me", token=bob["token"]))
+step("17. Admin re-enables Bob's account", call("POST", f"/admin/users/{bob['user_id']}/status", {"status": "active"}, ADMIN))
+step("18. Bob can authenticate again -> 200 OK", call("GET", "/me", token=bob["token"]))
+
+# Auditor oversight & book balancing
+aud = step("19. Admin creates an auditor", call("POST", "/admin/users", {"role": "auditor"}, ADMIN))
+step("20. Auditor reads Alice's statement (every entry traceable)", call("GET", f"/accounts/{a}/entries", token=aud["token"]))
+step("21. Auditor tries to move money -> 403 Forbidden (read-only)", call("POST", "/withdrawals", {"account_id": a, "amount": 1}, aud["token"], "aud-1"))
+step("22. Auditor reads audit log (includes all actions & security events)", call("GET", "/audit?limit=6", token=aud["token"]))
+step("23. Reconcile: mathematically prove the books balance", call("GET", "/reconcile", token=aud["token"]))
+print("\nDemo complete! All invariants and workflows verified successfully.\n")

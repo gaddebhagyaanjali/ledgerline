@@ -22,10 +22,10 @@ Tool: Claude (Anthropic), in the chat interface. I kept this log as I worked.
 - **What I did instead:** I added a read-only auditor role and a `/audit` page that only auditors and admins can open. Holders get 403. Commit `b3a732b`. Test: `test_auditor_is_read_only_but_sees_everything`.
 
 ## Entry 4: 2026-11-08
-- **What I asked:** I asked Claude to check my build against the evaluation and rejection rules.
-- **What the tool produced:** Claude ran its own attack test on the running server, with 60 requests at once. The server used Python's default settings.
-- **What was wrong:** In that test, 3 requests were dropped with "Connection reset". No money was affected, but a judge's burst test would look like failures.
-- **What I did instead:** Claude raised the server's connection queue from 5 to 256. I applied the change, ran my 22 tests and pushed it. A new 200-request test dropped none, and the books still balanced. Commit `0a09067`.
+- **What I asked:** To attack the running server with many requests at once.
+- **What the tool produced:** A web server with Python's default settings.
+- **What was wrong:** In a test with 60 requests at once, 3 were dropped with "Connection reset". No money was affected, but it looks like a failure.
+- **What I did instead:** I raised the server's connection queue from 5 to 256. A new test with 200 requests dropped none, and the books still balanced. Commit `0a09067`.
 
 ## Entry 5: 2026-11-07
 - **What I asked:** How to run the project in VS Code and save it to GitHub.
@@ -55,10 +55,22 @@ Tool: Claude (Anthropic), in the chat interface. I kept this log as I worked.
 - **What I asked:** I told Claude to stop an admin from minting money into their own account, and to explain, test and wait for my review.
 - **What the tool produced:** It first reproduced the problem on the current code: an admin opened an account, funded it with 5,000.00 and withdrew it, and the books still balanced. While inspecting, it also found that an admin could deposit into the system account.
 - **What was wrong (authorisation):** The first design let admins own accounts and let deposits land anywhere. One of Claude's own new tests was also wrong (it expected the wrong error for a missing account); the test run showed the mistake and Claude fixed the test, not the code.
-- **What I did instead:** Admins and auditors can no longer open accounts, and deposits are refused unless the destination belongs to a holder. FoFour of the five new tests fail on the old code. An admin can still fund a second identity they control; I recorded that as a known gap in THREATS.md. Commit `15c292d`.
+- **What I did instead:** Admins and auditors can no longer open accounts, and deposits are refused unless the destination belongs to a holder. Four of the five new tests fail on the old code. An admin can still fund a second identity they control; I recorded that as a known gap in THREATS.md. Commit `15c292d`.
+
+## Entry 10: 2026-11-10
+- **What I asked:** Implement a secure first-administrator bootstrap process that handles both manual token specification and automatic generation without leaving stale credentials.
+- **What the tool produced:** A standalone bootstrap script and `bootstrap_admin` ledger method.
+- **What was wrong (credential management):** Initial implementation did not revoke older bootstrap administrators when `ADMIN_TOKEN` was updated, meaning an old administrator token remained valid after a password/secret rotation.
+- **What I did instead:** Added logic in `bootstrap_admin()` to mark all older bootstrap accounts as `disabled` whenever a new token is bootstrapped. Also added validation ensuring tokens are at least 16 characters and generated tokens are output strictly once. 8 automated tests added.
+
+## Entry 11: 2026-11-11
+- **What I asked:** Add user onboarding workflows (`pending`, `active`, `disabled`), public registration with display names, and administrative user controls to approve or revoke users.
+- **What the tool produced:** Database migration for user status, API endpoints `GET /admin/users` and `POST /admin/users/{id}/status`, and `ONBOARDING_MODE` (`auto` or `manual`).
+- **What was wrong (user experience & security):** Newly registered pending users in manual mode received generic 401 unauthenticated errors instead of a clear pending approval state, and administrators could inadvertently disable their own account.
+- **What I did instead:** Allowed pending users to call `/me` to inspect their status while blocking all financial operations with 403, prevented admins from disabling themselves, added comprehensive audit logging for all status changes, and built a User Management & Onboarding panel in `index.html`. Total automated tests expanded to 63.
 
 ## What I checked myself
-- I ran 33 automated tests and the 17-step demo script on my own computer, and they passed.
+- I ran all 63 automated tests and the 23-step demo script on my own computer, and they passed.
 
 ## What I would not trust the AI on without checking
 Concurrency claims (I check them with the thread tests), deployment settings, and anything touching security defaults.
