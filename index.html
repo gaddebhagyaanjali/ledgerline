@@ -3,581 +3,722 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>BalanceVault — Money movement with a ledger you can prove</title>
+<title>BalanceVault — Secure Financial Ledger</title>
 <style>
 :root{
-  --dark:#0a291f;
-  --dark-surface:#0f382a;
-  --dark-card:#144434;
+  --dark:#07241a;
+  --sidebar-bg:#09261c;
+  --sidebar-active:#144434;
+  --emerald:#0d3b2b;
   --forest:#184a39;
-  --accent-green:#13795b;
-  --sage-bg:#eef5ec;
+  --accent:#13795b;
+  --sage-bg:#edf5eb;
   --sage-card:#e2ede0;
   --sage-border:#cfe0cd;
   --text-dark:#112019;
   --text-muted:#5b7065;
-  --bg-light:#f8faf7;
-  --card-light:#ffffff;
-  --line-light:#e5eae3;
-  --font-serif: Georgia, "Times New Roman", Cambria, serif;
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --bg:#f5f7f4;
+  --white:#ffffff;
+  --line:#e4eae2;
+  --serif: Georgia, "Times New Roman", Cambria, serif;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --ok:#13795b;
   --err:#b42318;
   --warn:#b54708;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:var(--font-sans);background:var(--bg-light);color:var(--text-dark);line-height:1.5;min-height:100vh}
+body{font-family:var(--sans);background:var(--bg);color:var(--text-dark);line-height:1.5;min-height:100vh}
 
-/* =========================================================
-   LOGIN SCREEN (Split Layout matching BalanceVault design)
-   ========================================================= */
-#loginScreen{display:grid;grid-template-columns:1fr 1fr;min-height:100vh}
-@media (max-width:880px){#loginScreen{grid-template-columns:1fr}}
+/* ============================================================
+   AUTH SCREEN — Split-screen BalanceVault
+   ============================================================ */
+#authScreen{display:grid;grid-template-columns:1fr 1fr;min-height:100vh}
+@media(max-width:860px){#authScreen{grid-template-columns:1fr}}
 
-.login-brand-pane{
-  background:linear-gradient(160deg, #072219 0%, #0d382b 60%, #124737 100%);
-  color:#fff;
-  padding:48px;
-  display:flex;
-  flex-direction:column;
-  justify-content:space-between;
-  position:relative;
-  overflow:hidden;
+/* Left Brand Pane */
+.brand-pane{
+  background:linear-gradient(160deg,#051d13 0%,#09281e 45%,#0d3429 100%);
+  color:#fff;padding:52px 56px;display:flex;flex-direction:column;
+  justify-content:space-between;position:relative;overflow:hidden;
 }
-.brand-badge-top{
-  display:inline-flex;
-  align-items:center;
-  gap:10px;
-  font-size:13px;
-  letter-spacing:1px;
-  text-transform:uppercase;
-  color:#86bfa8;
+.brand-pane::before{
+  content:"";position:absolute;top:-140px;right:-140px;
+  width:480px;height:480px;border-radius:50%;
+  background:radial-gradient(circle,rgba(19,121,91,0.18) 0%,transparent 70%);
+  pointer-events:none;
 }
-.brand-badge-top .logo-icon{
-  width:32px;height:32px;border-radius:8px;background:#e5f0e3;color:#0e382b;
-  font-family:var(--font-serif);font-size:20px;font-weight:bold;
+
+.bp-logo{display:flex;align-items:center;gap:14px}
+.bp-logo-mark{
+  width:38px;height:38px;border-radius:10px;
+  background:#e5f0e3;color:#07241a;
+  font-family:var(--serif);font-size:22px;font-weight:bold;
   display:flex;align-items:center;justify-content:center;
 }
-.login-hero-text h1{
-  font-family:var(--font-serif);
-  font-size:48px;
-  font-weight:normal;
-  line-height:1.15;
-  margin:24px 0 16px;
-  color:#f4faf5;
-}
-.login-hero-text h1 em{font-style:italic;color:#b4e3ce}
-.login-hero-text p{
-  font-size:16px;
-  color:#a5cfbd;
-  max-width:440px;
-  line-height:1.6;
-}
+.bp-logo-name{font-size:13px;letter-spacing:1.4px;text-transform:uppercase;color:#8dc4a9;font-weight:600}
 
-/* Card graphic inside login */
-.vault-card-graphic{
-  margin:36px 0;
-  background:linear-gradient(135deg, #d8ead5 0%, #c1dec0 100%);
-  color:#0f382a;
-  border-radius:18px;
-  padding:24px 28px;
-  max-width:400px;
-  box-shadow:0 20px 40px rgba(0,0,0,0.25);
-  border:1px solid rgba(255,255,255,0.4);
-}
-.vc-header{display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:bold;letter-spacing:0.5px}
-.vc-tag{background:rgba(15,56,42,0.12);padding:3px 10px;border-radius:99px}
-.vc-body{margin:28px 0 16px}
-.vc-body .title{font-size:13px;letter-spacing:1.5px;text-transform:uppercase;color:#2c5b4b}
-.vc-footer{display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:600}
-.vc-pill{background:#0e382b;color:#e8f5e6;padding:4px 12px;border-radius:99px;font-size:11px}
+.bp-hero{flex:1;display:flex;flex-direction:column;justify-content:center;padding:40px 0 20px}
+.bp-tagline{font-size:11.5px;letter-spacing:2.2px;text-transform:uppercase;color:#78b89e;font-weight:700;margin-bottom:18px}
+.bp-headline{font-family:var(--serif);font-size:50px;font-weight:normal;line-height:1.13;color:#f4fbf6;margin-bottom:20px}
+.bp-headline em{font-style:italic;color:#a8dfc4}
+.bp-subtext{font-size:16px;color:#8bbfab;max-width:400px;line-height:1.65}
 
-.brand-footer-text{
-  display:flex;justify-content:space-between;font-size:12px;color:#78a995;
-  border-top:1px solid rgba(255,255,255,0.1);padding-top:20px;
+/* Floating card illustration */
+.bp-card{
+  background:linear-gradient(140deg,#d6e9d3 0%,#c3ddc0 100%);
+  color:#07241a;border-radius:20px;padding:28px 32px;
+  max-width:380px;margin:32px 0;
+  box-shadow:0 32px 56px rgba(0,0,0,0.35),0 0 0 1px rgba(255,255,255,0.4);
+  position:relative;
 }
+.bp-card-top{display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:700;letter-spacing:0.8px}
+.bp-card-badge{background:rgba(7,36,26,0.14);padding:4px 12px;border-radius:99px;font-size:11px}
+.bp-card-mid{margin:36px 0 24px}
+.bp-card-mid .cml{font-size:11.5px;letter-spacing:1.6px;text-transform:uppercase;color:#2e5e4c;margin-bottom:6px}
+.bp-card-mid .cmv{font-size:22px;font-weight:bold}
+.bp-card-bot{display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:600}
+.bp-card-pill{background:#07241a;color:#e8f5e6;padding:5px 14px;border-radius:99px;font-size:11px}
 
-/* Right Pane: Form */
-.login-form-pane{
-  background:#fff;
-  padding:60px 48px;
-  display:flex;
-  flex-direction:column;
-  justify-content:center;
-  max-width:540px;
-  margin:0 auto;
-  width:100%;
+/* Tooltip badges floating around card */
+.bp-float-badge{
+  position:absolute;background:#fff;border-radius:20px;padding:8px 16px;
+  font-size:12px;font-weight:600;color:#07241a;
+  box-shadow:0 8px 24px rgba(0,0,0,0.18);display:flex;align-items:center;gap:8px;
+  white-space:nowrap;
 }
-.login-form-pane h2{font-family:var(--font-serif);font-size:34px;color:#0e382b;margin-bottom:6px;font-weight:normal}
-.login-form-pane .subtitle{color:var(--text-muted);font-size:14px;margin-bottom:32px}
-.form-group{margin-bottom:18px}
-.form-group label{display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:#243e33}
-.form-group input{
-  width:100%;padding:12px 14px;font-size:15px;border-radius:9px;
-  border:1px solid #d4dfd2;background:#f9fbf9;color:#112019;transition:all 0.2s;
+.bp-float-badge .dot{width:8px;height:8px;border-radius:50%;background:#13795b}
+.badge-top-right{top:-18px;right:12px}
+.badge-bot-left{bottom:-18px;left:12px}
+
+.bp-footer{display:flex;justify-content:space-between;font-size:12px;color:#6b9e8a;border-top:1px solid rgba(255,255,255,0.1);padding-top:22px}
+
+/* Right Form Pane */
+.form-pane{
+  background:#fff;display:flex;align-items:center;justify-content:center;padding:60px 48px;
 }
-.form-group input:focus{outline:none;border-color:#184a39;background:#fff;box-shadow:0 0 0 3px rgba(24,74,57,0.12)}
-.btn-primary{
-  width:100%;padding:13px;border-radius:9px;background:#134333;color:#fff;
-  font-size:15px;font-weight:600;border:0;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;
+.form-inner{width:100%;max-width:400px}
+
+.auth-tabs{display:flex;gap:0;border-bottom:1px solid var(--line);margin-bottom:32px}
+.auth-tab{
+  padding:10px 16px;font-size:14px;font-weight:500;color:var(--text-muted);
+  cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;
+  transition:all 0.15s;white-space:nowrap;
+}
+.auth-tab.active{color:#0d3b2b;border-bottom-color:#0d3b2b;font-weight:600}
+
+.form-title{font-family:var(--serif);font-size:34px;color:#0d3b2b;font-weight:normal;margin-bottom:6px}
+.form-sub{font-size:14px;color:var(--text-muted);margin-bottom:28px}
+
+.fg{margin-bottom:20px}
+.fg label{display:block;font-size:13px;font-weight:600;color:#1f3d30;margin-bottom:7px}
+.fg input{
+  width:100%;padding:13px 15px;border-radius:9px;border:1px solid #d2ddd0;
+  background:#f8faf7;font-size:15px;color:#0d2b1f;transition:all 0.15s;
+}
+.fg input:focus{outline:none;border-color:#0d3b2b;background:#fff;box-shadow:0 0 0 3px rgba(13,59,43,0.1)}
+.fg input::placeholder{color:#8fa99a}
+
+.btn-prim{
+  width:100%;padding:14px;border-radius:9px;background:#0d3b2b;color:#fff;
+  font-size:15px;font-weight:600;border:0;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;gap:8px;
   transition:background 0.2s;
 }
-.btn-primary:hover{background:#0b2e23}
-.btn-secondary{
-  width:100%;padding:11px;border-radius:9px;background:transparent;color:#134333;
-  font-size:14px;font-weight:600;border:1px solid #c2d6c1;cursor:pointer;margin-top:10px;
-}
-.btn-secondary:hover{background:#f0f6ee}
-.login-security-notice{
-  margin-top:36px;padding:14px;background:#f3f7f2;border-radius:8px;
-  font-size:12px;color:#456355;display:flex;gap:10px;line-height:1.5;
+.btn-prim:hover{background:#07241a}
+.btn-prim:active{transform:scale(0.99)}
+
+.switch-link-row{margin-top:18px;text-align:center;font-size:13px;color:var(--text-muted)}
+.switch-link-row a{color:#0d3b2b;font-weight:600;text-decoration:none}
+.switch-link-row a:hover{text-decoration:underline}
+
+.auth-notice{
+  margin-top:28px;padding:14px 16px;background:#f2f7f1;border-radius:9px;
+  font-size:12px;color:#3d6652;display:flex;gap:10px;align-items:flex-start;line-height:1.6;
 }
 
-/* =========================================================
-   DASHBOARD SCREEN (Sidebar + Workspace matching demo)
-   ========================================================= */
-#dashboardScreen{display:flex;min-height:100vh}
+/* Token modal */
+.modal-backdrop{
+  position:fixed;inset:0;background:rgba(7,36,26,0.72);backdrop-filter:blur(2px);
+  display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px;
+}
+.modal-box{
+  background:#fff;border-radius:20px;max-width:460px;width:100%;padding:36px 32px;
+  box-shadow:0 32px 72px rgba(0,0,0,0.3);text-align:center;
+}
+.modal-icon{font-size:40px;margin-bottom:14px}
+.modal-box h3{font-family:var(--serif);font-size:26px;color:#0d3b2b;margin-bottom:8px}
+.modal-box p{font-size:14px;color:var(--text-muted);line-height:1.6;margin-bottom:20px}
+.token-box{
+  background:#f2f7f1;border:1.5px solid #cae0c6;border-radius:10px;padding:16px;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
+  font-weight:700;color:#0d3b2b;word-break:break-all;user-select:all;
+  margin-bottom:14px;text-align:left;line-height:1.6;
+}
+.modal-status{font-size:13px;font-weight:600;color:#0d3b2b;margin-bottom:22px}
+
+/* ============================================================
+   DASHBOARD SCREEN
+   ============================================================ */
+#dashScreen{display:flex;min-height:100vh}
+
+/* Sidebar */
 .sidebar{
-  width:240px;background:#09241b;color:#e8f4ec;padding:24px 16px;
-  display:flex;flex-direction:column;justify-content:space-between;flex-shrink:0;
+  width:220px;background:var(--sidebar-bg);color:#e4f1ea;padding:0;
+  display:flex;flex-direction:column;justify-content:space-between;
+  flex-shrink:0;position:sticky;top:0;height:100vh;overflow-y:auto;
 }
-@media (max-width:960px){.sidebar{display:none}}
+@media(max-width:980px){.sidebar{display:none}}
 
-.sidebar-logo{display:flex;align-items:center;gap:10px;padding:4px 8px 24px;border-bottom:1px solid rgba(255,255,255,0.08)}
-.sidebar-logo .icon{width:30px;height:30px;border-radius:7px;background:#e2f2df;color:#09241b;font-family:var(--font-serif);font-weight:bold;font-size:18px;display:flex;align-items:center;justify-content:center}
-.sidebar-logo .name{font-family:var(--font-sans);font-weight:700;font-size:16px;letter-spacing:-0.3px;color:#fff}
+.sb-logo{
+  display:flex;align-items:center;gap:11px;padding:22px 20px 18px;
+  border-bottom:1px solid rgba(255,255,255,0.07);
+}
+.sb-logo-mark{
+  width:30px;height:30px;border-radius:7px;background:#e5f0e3;
+  color:#07241a;font-family:var(--serif);font-size:18px;font-weight:bold;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.sb-logo-name{font-size:15px;font-weight:700;color:#fff;letter-spacing:-0.3px}
 
-.sidebar-nav-title{font-size:11px;letter-spacing:1.2px;text-transform:uppercase;color:#6b9a87;margin:24px 8px 8px}
+.sb-section-label{
+  font-size:10.5px;letter-spacing:1.5px;text-transform:uppercase;
+  color:#5e957e;margin:22px 20px 8px;font-weight:600;
+}
 .nav-item{
-  display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;
-  color:#cde3d6;font-size:14px;font-weight:500;cursor:pointer;margin-bottom:4px;transition:all 0.15s;
+  display:flex;align-items:center;gap:11px;padding:10px 16px;border-radius:8px;
+  color:#b8d9cc;font-size:14px;font-weight:500;cursor:pointer;
+  margin:1px 8px;transition:all 0.14s;
 }
 .nav-item:hover{background:rgba(255,255,255,0.07);color:#fff}
-.nav-item.active{background:#164232;color:#fff;font-weight:600}
+.nav-item.active{background:var(--sidebar-active);color:#fff;font-weight:600}
+.nav-item svg,.nav-item .ni{flex-shrink:0;opacity:0.75;width:16px;text-align:center}
+.nav-item.active .ni{opacity:1}
+.nav-chevron{margin-left:auto;opacity:0.4;font-size:11px}
 
-.sidebar-bottom-badge{
-  background:#11382a;border-radius:12px;padding:14px;font-size:12px;color:#9bc4b0;
-  border:1px solid rgba(255,255,255,0.05);
+.sb-bottom{padding:16px 12px 20px}
+.sb-badge{
+  background:#0d3221;border-radius:12px;padding:14px 16px;
+  font-size:11.5px;color:#85b8a2;border:1px solid rgba(255,255,255,0.05);
+  display:flex;align-items:center;gap:10px;
 }
-.sidebar-bottom-badge strong{display:block;color:#f0f9f3;font-size:13px;margin-bottom:2px}
+.sb-badge .shield{font-size:16px;flex-shrink:0}
+.sb-badge-text strong{display:block;color:#e4f1ea;font-size:12.5px;margin-bottom:2px}
+.sb-byline{font-size:10px;text-align:center;color:#3e7260;margin-top:12px;letter-spacing:1px;text-transform:uppercase}
 
-/* Main Content Area */
-.main-wrapper{flex:1;display:flex;flex-direction:column;background:#f7f9f6;min-width:0}
-.top-nav{
-  height:64px;background:#fff;border-bottom:1px solid var(--line-light);
+/* Main wrapper */
+.main{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--bg)}
+
+/* Top navigation bar */
+.topbar{
+  height:64px;background:#fff;border-bottom:1px solid var(--line);
   display:flex;align-items:center;justify-content:space-between;padding:0 32px;
+  position:sticky;top:0;z-index:10;
 }
-.breadcrumbs{font-size:13px;color:var(--text-muted);display:flex;align-items:center;gap:8px}
-.breadcrumbs strong{color:var(--text-dark)}
-.top-right{display:flex;align-items:center;gap:18px}
-.status-pill{
-  display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#13795b;
-  background:#e8f7ee;padding:4px 10px;border-radius:99px;font-weight:500;
-}
-.status-pill .dot{width:7px;height:7px;border-radius:50%;background:#13795b}
-.user-chip{display:flex;align-items:center;gap:10px;padding:4px 10px;border-radius:8px;background:#f3f7f2}
-.user-chip .avatar{width:28px;height:28px;border-radius:50%;background:#184a39;color:#fff;font-size:12px;font-weight:bold;display:flex;align-items:center;justify-content:center}
-.user-chip .details{display:flex;flex-direction:column;font-size:12px}
-.user-chip .details .name{font-weight:600;color:#112019}
-.user-chip .details .role{font-size:11px;color:var(--text-muted)}
-.btn-logout{background:transparent;border:1px solid #d4dfd2;padding:6px 12px;border-radius:7px;font-size:12px;cursor:pointer;color:#456355}
-.btn-logout:hover{background:#eaeaea}
+.breadcrumb{font-size:13px;color:var(--text-muted);display:flex;align-items:center;gap:7px}
+.breadcrumb strong{color:var(--text-dark);font-weight:600}
+.topbar-right{display:flex;align-items:center;gap:16px}
 
-/* Workspace Canvas */
-.workspace-canvas{padding:32px;max-width:1140px;margin:0 auto;width:100%;display:grid;gap:24px}
+.sys-pill{
+  display:inline-flex;align-items:center;gap:7px;font-size:12px;
+  color:#13795b;background:#ecf7f1;padding:5px 12px;border-radius:99px;font-weight:600;
+}
+.sys-pill .dot{width:7px;height:7px;border-radius:50%;background:#13795b}
 
-/* Financial Overview Banner */
-.overview-banner{
-  background:linear-gradient(135deg, #e7f2e5 0%, #d8ebd4 100%);
-  border:1px solid #c8e0c4;
-  border-radius:18px;
-  padding:32px 36px;
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  position:relative;
-  overflow:hidden;
+.user-chip{
+  display:flex;align-items:center;gap:10px;padding:5px 12px 5px 5px;
+  border-radius:10px;background:#f3f7f2;cursor:default;
 }
-.banner-content .tag{font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:#3b6e58;font-weight:700}
-.banner-content h2{font-family:var(--font-serif);font-size:36px;color:#0e382b;margin:8px 0;font-weight:normal}
-.banner-content h2 em{font-style:italic;font-family:var(--font-serif)}
-.banner-content p{color:#436a59;font-size:15px;margin-bottom:14px}
-.banner-badges{display:flex;gap:12px;font-size:12px;color:#2c5b48;font-weight:600}
-.banner-badges span{background:rgba(255,255,255,0.6);padding:4px 12px;border-radius:99px}
-.banner-emblem{
-  width:96px;height:96px;border-radius:50%;border:2px solid rgba(24,74,57,0.2);
-  display:flex;align-items:center;justify-content:center;position:relative;flex-shrink:0;
+.user-avatar{
+  width:30px;height:30px;border-radius:50%;background:var(--forest);color:#fff;
+  font-size:12px;font-weight:bold;display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
 }
-.banner-emblem .inner{
-  width:64px;height:64px;border-radius:50%;background:#cbe4c6;color:#0e382b;
-  font-family:var(--font-serif);font-size:36px;font-weight:bold;
+.user-info{display:flex;flex-direction:column;line-height:1.3}
+.user-info .uname{font-size:12.5px;font-weight:600;color:#0d2b1f}
+.user-info .urole{font-size:11px;color:var(--text-muted)}
+.user-caret{font-size:11px;color:var(--text-muted)}
+
+.btn-signout{
+  background:#fff;border:1px solid #d4dcd2;padding:7px 14px;
+  border-radius:8px;font-size:12.5px;cursor:pointer;color:#3a5e4a;
+  font-weight:500;transition:background 0.15s;
+}
+.btn-signout:hover{background:#f3f7f2}
+
+/* Canvas */
+.canvas{padding:32px 36px;max-width:1100px;margin:0 auto;width:100%;display:grid;gap:24px}
+
+/* Overview Banner */
+.ov-banner{
+  background:linear-gradient(130deg,#e8f3e6 0%,#daebd6 100%);
+  border:1px solid #cce0c8;border-radius:20px;padding:32px 36px;
+  display:flex;align-items:center;justify-content:space-between;
+  gap:24px;position:relative;overflow:hidden;
+}
+.ov-banner::after{
+  content:"";position:absolute;right:-60px;top:-60px;
+  width:260px;height:260px;border-radius:50%;
+  background:radial-gradient(circle,rgba(255,255,255,0.4) 0%,transparent 70%);
+  pointer-events:none;
+}
+.ovb-left .ovb-tag{font-size:10.5px;letter-spacing:2px;text-transform:uppercase;color:#2e6650;font-weight:800;margin-bottom:10px}
+.ovb-left h2{font-family:var(--serif);font-size:38px;color:#0a3222;font-weight:normal;margin-bottom:8px;line-height:1.1}
+.ovb-left h2 em{font-style:italic}
+.ovb-left p{font-size:14px;color:#3d6652;margin-bottom:16px}
+.ovb-badges{display:flex;gap:10px;flex-wrap:wrap}
+.ovb-badge{
+  background:rgba(255,255,255,0.72);border:1px solid rgba(0,0,0,0.06);
+  padding:5px 14px;border-radius:99px;font-size:11.5px;color:#2a5e46;font-weight:600;
+}
+.ovb-badge .dot-g{width:6px;height:6px;border-radius:50%;background:#13795b;display:inline-block;margin-right:6px;vertical-align:middle}
+.ov-counter{font-size:11px;color:#618e78;font-weight:600;letter-spacing:0.5px;margin-top:12px}
+.ovb-emblem{flex-shrink:0;position:relative;z-index:1}
+.emblem-ring{
+  width:100px;height:100px;border-radius:50%;border:1.5px solid rgba(13,59,43,0.2);
+  display:flex;align-items:center;justify-content:center;
+}
+.emblem-inner{
+  width:68px;height:68px;border-radius:50%;background:#c8e2c4;color:#0a3222;
+  font-family:var(--serif);font-size:36px;font-weight:bold;
   display:flex;align-items:center;justify-content:center;
 }
 
-/* Stat Cards */
-.stats-grid{display:grid;grid-template-columns:repeat(auto-fit, minmax(260px, 1fr));gap:16px}
-.stat-card{background:#fff;border:1px solid var(--line-light);border-radius:14px;padding:22px;display:flex;flex-direction:column;justify-content:space-between}
-.stat-card .label{font-size:12px;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-muted);font-weight:600;margin-bottom:12px}
-.stat-card .value{font-size:28px;font-weight:700;color:#0e382b;letter-spacing:-0.5px}
-.stat-card .sub{font-size:13px;color:#527364;margin-top:4px}
+/* Two-column stat row */
+.stat-row{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.stat-card{
+  background:#fff;border:1px solid var(--line);border-radius:16px;
+  padding:24px 26px;
+}
+.stat-card .sc-label{font-size:11px;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-muted);font-weight:700;margin-bottom:14px}
+.stat-card .sc-icon{width:38px;height:38px;border-radius:9px;background:#f1f7f0;display:flex;align-items:center;justify-content:center;margin-bottom:16px}
+.stat-card .sc-val{font-size:34px;font-weight:700;color:#0a3222;letter-spacing:-1px;margin-bottom:6px}
+.stat-card .sc-sub{font-size:12.5px;color:#527364}
+.stat-card .sc-bar{height:4px;background:#e9f0e7;border-radius:99px;margin-top:14px}
+.stat-card .sc-bar-fill{height:100%;background:#13795b;border-radius:99px;transition:width 0.6s}
 
-/* App Sections */
-.card-section{background:#fff;border:1px solid var(--line-light);border-radius:16px;padding:26px;box-shadow:0 2px 4px rgba(0,0,0,0.02)}
-.card-section .section-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
-.card-section h3{font-family:var(--font-serif);font-size:20px;color:#0e382b;font-weight:normal}
+/* Accounts card (also stat-card-wide) */
+.stat-card-wide{
+  background:#fff;border:1px solid var(--line);border-radius:16px;
+  padding:22px 26px;grid-column:1/-1;
+}
+.stat-card-wide .sc-label{font-size:11px;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-muted);font-weight:700;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center}
+.sc-your-accounts{display:flex;gap:14px;align-items:flex-start;min-height:60px}
+.sc-acct-empty{color:#8fa99a;font-size:13px;padding:8px 0}
+.sc-acct-item{background:#f5f8f4;border:1px solid #dce8da;border-radius:10px;padding:10px 16px;min-width:160px}
+.sc-acct-item .ait{font-size:11px;color:#527364;margin-bottom:4px}
+.sc-acct-item .aiv{font-size:16px;font-weight:700;color:#0a3222}
+
+/* Quick actions small cards */
+.qa-row{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+@media(max-width:760px){.qa-row{grid-template-columns:1fr}}
+.qa-card{
+  background:#fff;border:1px solid var(--line);border-radius:14px;
+  padding:20px;position:relative;
+}
+.qa-open-badge{
+  position:absolute;top:12px;right:12px;font-size:10px;font-weight:700;
+  letter-spacing:0.8px;text-transform:uppercase;color:#8fa99a;
+}
+.qa-card h4{font-size:15px;font-weight:600;color:#0a3222;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.qa-card .qa-icon{width:28px;height:28px;border-radius:7px;background:#f1f7f0;display:flex;align-items:center;justify-content:center;font-size:14px}
+.qa-card .form-row{display:grid;gap:10px;margin-bottom:12px}
+.qa-card input,.qa-card select{
+  width:100%;padding:10px 13px;border-radius:8px;border:1px solid #d2ddd0;
+  background:#f8faf7;font-size:13.5px;color:#0d2b1f;
+}
+.qa-card input:focus,.qa-card select:focus{outline:none;border-color:#0d3b2b;background:#fff}
+.qa-card .qa-btn{
+  width:100%;padding:10px;border-radius:8px;background:#184a39;color:#fff;
+  font-size:13.5px;font-weight:600;border:0;cursor:pointer;transition:background 0.2s;
+}
+.qa-card .qa-btn:hover{background:#0d3b2b}
+
+/* General card section */
+.card-section{background:#fff;border:1px solid var(--line);border-radius:18px;padding:26px 28px}
+.cs-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px}
+.cs-header h3{font-family:var(--serif);font-size:21px;color:#0a3222;font-weight:normal}
+.cs-header-link{font-size:13px;color:#13795b;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;text-decoration:none}
+.cs-header-link:hover{text-decoration:underline}
 
 /* Tables */
 table{width:100%;border-collapse:collapse;font-size:13px}
-th{text-align:left;padding:10px 12px;background:#f7faf6;color:#456355;font-weight:600;border-bottom:1px solid var(--line-light);border-top:1px solid var(--line-light)}
-td{padding:12px;border-bottom:1px solid var(--line-light);color:#192f24;word-break:break-all}
+th{text-align:left;padding:11px 14px;background:#f7faf6;color:#3d6652;font-weight:600;border-bottom:1px solid var(--line);border-top:1px solid var(--line);font-size:12px;text-transform:uppercase;letter-spacing:0.5px}
+td{padding:13px 14px;border-bottom:1px solid var(--line);color:#1a2f24;vertical-align:middle}
+tr:last-child td{border-bottom:0}
 tr:hover td{background:#fafcf9}
 
-/* Action Buttons in Tables */
-button.btn-table{padding:5px 10px;border-radius:6px;font-size:12px;cursor:pointer;font-weight:500;border:1px solid #c8d9c5;background:#fff;color:#184a39}
-button.btn-table:hover{background:#edf4ec}
-button.btn-table.danger{border-color:#f1b2ae;color:#b42318;background:#fff}
-button.btn-table.danger:hover{background:#fdf2f2}
-button.btn-table.approve{background:#13795b;color:#fff;border-color:#13795b}
-button.btn-table.approve:hover{background:#0e5e46}
+button.btn-t{padding:6px 13px;border-radius:7px;font-size:12px;cursor:pointer;font-weight:600;border:1px solid #c8d9c5;background:#fff;color:#184a39;transition:all 0.14s}
+button.btn-t:hover{background:#ecf4ea}
+button.btn-t.danger{border-color:#f0aeaa;color:#b42318}
+button.btn-t.danger:hover{background:#fdf2f2}
+button.btn-t.approve{background:#13795b;color:#fff;border-color:#13795b}
+button.btn-t.approve:hover{background:#0e5e46}
 
-/* Quick Actions Grid */
-.actions-grid{display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:16px;margin-top:16px}
-.action-box{background:#f9fbf9;border:1px solid var(--line-light);border-radius:12px;padding:18px}
-.action-box h4{font-size:15px;color:#0e382b;margin-bottom:12px;display:flex;align-items:center;gap:6px}
-.action-box .form-row{display:grid;gap:10px;margin-bottom:10px}
-.action-box input, .action-box select{
-  width:100%;padding:9px 12px;border-radius:7px;border:1px solid #d4dfd2;background:#fff;font-size:13px;
-}
-.action-box button{
-  width:100%;padding:9px;border-radius:7px;background:#184a39;color:#fff;font-weight:600;font-size:13px;border:0;cursor:pointer;
-}
-.action-box button:hover{background:#0f382a}
+/* Alert banners */
+.alert{padding:16px 20px;border-radius:12px;font-size:13.5px;display:flex;align-items:flex-start;gap:12px}
+.alert.warn{background:#fff9eb;border:1px solid #fce68a;color:#8c4a00}
+.alert.ok{background:#ecf9f1;border:1px solid #aedfc2;color:#0b5134}
 
-/* Banner Notices */
-.alert-banner{padding:16px 20px;border-radius:12px;font-size:14px;margin-bottom:20px;display:flex;align-items:center;gap:12px}
-.alert-banner.warn{background:#fff8e6;border:1px solid #fedf89;color:#8f4700}
-.alert-banner.ok{background:#edf9f0;border:1px solid #b7e8c3;color:#0e583c}
-
-/* Response Terminal */
+/* Terminal */
 pre#out{
-  background:#09241b;color:#a5cfbd;padding:16px;border-radius:10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
-  font-size:12px;overflow:auto;max-height:220px;white-space:pre-wrap;margin-top:8px;border:1px solid #144434;
+  background:#08201a;color:#94c9b0;padding:16px 20px;border-radius:12px;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:12.5px;overflow:auto;max-height:200px;white-space:pre-wrap;
+  border:1px solid #12382c;line-height:1.6;
 }
-pre#out.ok{border-left:5px solid #13795b}
-pre#out.err{border-left:5px solid #f04438}
+pre#out.ok{border-left:4px solid #13795b}
+pre#out.err{border-left:4px solid #f04438}
 
+.terminal-card{background:#08201a;border:1px solid #12382c;border-radius:16px;padding:22px 24px}
+.terminal-card .tc-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.terminal-card .tc-header h3{font-size:14px;color:#94c9b0;font-weight:600;letter-spacing:0.3px}
+.tc-dots{display:flex;gap:6px}
+.tc-dots span{width:10px;height:10px;border-radius:50%;background:#194838}
+
+/* Misc */
 .hide{display:none !important}
+select{font-family:var(--sans)}
 </style>
 </head>
 <body>
 
-<!-- ========================================================
-     1. LOGIN & SIGNUP SCREEN (Split Layout)
-     ======================================================== -->
-<div id="loginScreen">
-  <div class="login-brand-pane">
-    <div>
-      <div class="brand-badge-top">
-        <span class="logo-icon">b</span>
-        <span>BalanceVault • Private Ledger</span>
-      </div>
-      <div class="login-hero-text">
-        <p style="text-transform:uppercase;letter-spacing:1.5px;font-size:12px;color:#85bfa7;font-weight:bold">Money, accounted for.</p>
-        <h1>Confidence in<br>every <em>transaction.</em></h1>
-        <p>A clearer view of your accounts, built on a double-entry ledger where every entry has its place.</p>
-      </div>
+<!-- ============================================================
+     1. AUTH SCREEN
+     ============================================================ -->
+<div id="authScreen">
 
-      <div class="vault-card-graphic">
-        <div class="vc-header">
+  <!-- Left brand pane -->
+  <div class="brand-pane">
+    <div class="bp-logo">
+      <div class="bp-logo-mark">b</div>
+      <span class="bp-logo-name">BalanceVault · Private</span>
+    </div>
+
+    <div class="bp-hero">
+      <div class="bp-tagline">Money, accounted for.</div>
+      <h1 class="bp-headline">Confidence in<br>every <em>transaction.</em></h1>
+      <p class="bp-subtext">A clearer view of your accounts, built on a ledger where every entry has its place.</p>
+
+      <div class="bp-card" style="margin-top:36px">
+        <div class="bp-float-badge badge-top-right"><span class="dot"></span>01 · Verified access</div>
+        <div class="bp-card-top">
           <span>BV / PRIVATE LEDGER</span>
-          <span class="vc-tag">01 Verified access</span>
         </div>
-        <div class="vc-body">
-          <div class="title">Cryptographically Auditable</div>
-          <div style="font-size:24px;font-weight:bold;margin-top:4px">Provable Zero-Sum</div>
+        <div class="bp-card-mid">
+          <div class="cml">Double-Entry · Zero-Sum</div>
+          <div class="cmv">Cryptographically Auditable</div>
         </div>
-        <div class="vc-footer">
+        <div class="bp-card-bot">
           <span>SECURE BY DESIGN</span>
-          <span class="vc-pill">✓ Every entry accountable</span>
+          <span class="bp-card-pill">✓ Every entry accountable</span>
         </div>
+        <div class="bp-float-badge badge-bot-left"><span class="dot"></span>Every entry accountable</div>
       </div>
     </div>
 
-    <div class="brand-footer-text">
+    <div class="bp-footer">
       <span>Private by design</span>
       <span>Built around financial integrity</span>
     </div>
   </div>
 
-  <div class="login-form-pane">
-    <h2>Sign in to your vault</h2>
-    <p class="subtitle">Your accounts, clearly in view.</p>
+  <!-- Right form pane -->
+  <div class="form-pane">
+    <div class="form-inner">
+      <div class="auth-tabs">
+        <div class="auth-tab active" id="tabSignIn">Sign in to your vault</div>
+        <div class="auth-tab" id="tabSignUp">Create an account</div>
+      </div>
 
-    <div class="form-group">
-      <label for="tok">Access Token</label>
-      <input id="tok" type="password" placeholder="Paste your access token" autocomplete="off">
-    </div>
-    <button id="signin" class="btn-primary">Sign in →</button>
+      <!-- Sign-in view -->
+      <div id="viewSignIn">
+        <div class="form-title">Sign in</div>
+        <div class="form-sub">Your accounts, clearly in view.</div>
 
-    <div style="margin:24px 0 16px;text-align:center;font-size:13px;color:#6b877a;position:relative">
-      <span style="background:#fff;padding:0 10px;position:relative;z-index:1">or register as account holder</span>
-      <div style="position:absolute;top:50%;left:0;right:0;height:1px;background:#e2ebe0;z-index:0"></div>
-    </div>
+        <div class="fg">
+          <label for="tok">Access token</label>
+          <input id="tok" type="password" placeholder="Paste your access token" autocomplete="off">
+        </div>
+        <button id="signin" class="btn-prim">Sign in &nbsp;→</button>
 
-    <div class="form-group">
-      <label for="dispName">Display Name (optional)</label>
-      <input id="dispName" placeholder="e.g. Alice or Gadde">
-    </div>
-    <button id="signup" class="btn-secondary">Create an account</button>
+        <div class="switch-link-row">
+          New to BalanceVault? <a href="javascript:void(0)" id="linkGoSignUp">Create an account</a>
+        </div>
 
-    <div class="login-security-notice">
-      <span>🔒</span>
-      <span>Your connection is protected. Tokens are cryptographically hashed using SHA-256 and verified through timing-safe comparison.</span>
-    </div>
+        <div class="auth-notice">
+          <span>🔒</span>
+          <span>Your connection is protected. We never display or store your password in the browser after signing in.</span>
+        </div>
 
-    <div style="margin-top:20px">
-      <pre id="loginOut" class="hide" style="font-size:11px;padding:8px;border-radius:6px;background:#f3f7f2"></pre>
+        <pre id="loginOut" class="hide" style="margin-top:14px;padding:12px;border-radius:8px;background:#fdf2f2;color:#b42318;font-size:12px;border:1px solid #f0aeaa;white-space:pre-wrap"></pre>
+      </div>
+
+      <!-- Sign-up view -->
+      <div id="viewSignUp" class="hide">
+        <div class="form-title">Create your vault</div>
+        <div class="form-sub">Open an account on a provable, secure ledger.</div>
+
+        <div class="fg">
+          <label for="dispName">Display name <span style="font-weight:400;color:var(--text-muted)">(optional)</span></label>
+          <input id="dispName" placeholder="e.g. Alice">
+        </div>
+        <button id="signup" class="btn-prim">Create an account &nbsp;→</button>
+
+        <div class="switch-link-row">
+          Already have an account? <a href="javascript:void(0)" id="linkGoSignIn">Sign in</a>
+        </div>
+
+        <div class="auth-notice">
+          <span>ℹ️</span>
+          <span>Tokens are shown once at sign-up. Save yours — it is the only way back in.</span>
+        </div>
+      </div>
     </div>
   </div>
 </div>
 
+<!-- ============================================================
+     TOKEN MODAL
+     ============================================================ -->
+<div id="tokenModal" class="modal-backdrop hide">
+  <div class="modal-box">
+    <div class="modal-icon">🎉</div>
+    <h3>Account Created!</h3>
+    <p>Save this access token now. It is your private login key and is <strong>shown only once</strong>. Store it somewhere safe before continuing.</p>
+    <div class="token-box" id="modalToken"></div>
+    <div class="modal-status" id="modalStatus"></div>
+    <button id="modalProceed" class="btn-prim">I've saved my token — Sign in →</button>
+  </div>
+</div>
 
-<!-- ========================================================
-     2. DASHBOARD SCREEN (Sidebar + Workspace)
-     ======================================================== -->
-<div id="dashboardScreen" class="hide">
-  <!-- Left Sidebar -->
+<!-- ============================================================
+     2. DASHBOARD SCREEN
+     ============================================================ -->
+<div id="dashScreen" class="hide">
+
+  <!-- Sidebar -->
   <aside class="sidebar">
     <div>
-      <div class="sidebar-logo">
-        <span class="icon">b</span>
-        <span class="name">balancevault</span>
+      <div class="sb-logo">
+        <div class="sb-logo-mark">b</div>
+        <span class="sb-logo-name">balancevault</span>
       </div>
 
-      <div class="sidebar-nav-title">Workspace</div>
+      <div class="sb-section-label">Workspace</div>
       <div class="nav-item active" id="navOverview">
-        <span>⊞</span> <span>Overview</span>
+        <span class="ni">⊞</span> <span>Overview</span>
       </div>
       <div class="nav-item" id="navAccounts">
-        <span>💳</span> <span>Accounts</span>
+        <span class="ni">▤</span> <span>Accounts</span> <span class="nav-chevron">›</span>
       </div>
       <div class="nav-item" id="navStatements">
-        <span>📈</span> <span>Statements</span>
+        <span class="ni">∿</span> <span>Statements</span>
       </div>
       <div class="nav-item hide" id="navUserMgmt">
-        <span>👥</span> <span>User Management</span>
+        <span class="ni">◉</span> <span>+ Account request</span>
       </div>
       <div class="nav-item hide" id="navOversight">
-        <span>🛡️</span> <span>Oversight & Audit</span>
+        <span class="ni">🛡</span> <span>Oversight &amp; Audit</span>
       </div>
     </div>
 
-    <div>
-      <div class="sidebar-bottom-badge">
-        <strong>Protected ledger</strong>
-        <span>Secure by design ✓</span>
+    <div class="sb-bottom">
+      <div class="sb-badge">
+        <span class="shield">🛡</span>
+        <div class="sb-badge-text">
+          <strong>Protected ledger</strong>
+          <span>Secure by design ✓</span>
+        </div>
       </div>
-      <div style="font-size:11px;color:#5b8773;margin-top:12px;text-align:center">
-        BALANCEVAULT • PRIVATE
-      </div>
+      <div class="sb-byline">BalanceVault · Private</div>
     </div>
   </aside>
 
-  <!-- Main Wrapper -->
-  <div class="main-wrapper">
-    <!-- Top Nav -->
-    <header class="top-nav">
-      <div class="breadcrumbs">
-        <span>Workspace</span> / <strong id="bcPage">Overview</strong>
+  <!-- Main area -->
+  <div class="main">
+    <!-- Top bar -->
+    <header class="topbar">
+      <div class="breadcrumb">
+        <span>Workspace</span>
+        <span style="color:#cdd8ca">/</span>
+        <strong id="bcPage">Overview</strong>
       </div>
-
-      <div class="top-right">
-        <div class="status-pill">
-          <span class="dot"></span>
-          <span>Systems operational</span>
-        </div>
-
+      <div class="topbar-right">
+        <div class="sys-pill"><span class="dot"></span>Systems operational</div>
         <div class="user-chip">
-          <div class="avatar" id="userAvatar">U</div>
-          <div class="details">
-            <span class="name" id="userNameLabel">Account User</span>
-            <span class="role" id="userRoleBadge">Holder • active</span>
+          <div class="user-avatar" id="uAvatar">U</div>
+          <div class="user-info">
+            <span class="uname" id="uName">Account User</span>
+            <span class="urole" id="uRole">Account holder</span>
           </div>
+          <span class="user-caret">∨</span>
         </div>
-
-        <button id="logout" class="btn-logout">Sign out</button>
+        <button class="btn-signout" id="logout">Sign out</button>
       </div>
     </header>
 
     <!-- Canvas -->
-    <main class="workspace-canvas">
-      <!-- Pending Approval Banner -->
-      <div id="pendingBanner" class="alert-banner warn hide">
-        <span>⚠️</span>
-        <div>
-          <strong>Account Pending Administrator Approval:</strong>
-          Your account request has been registered. Financial actions (transfers, withdrawals) will be enabled once approved.
-        </div>
+    <main class="canvas">
+
+      <!-- Pending banner -->
+      <div id="pendingBanner" class="alert warn hide">
+        <span style="font-size:20px">⚠️</span>
+        <div><strong>Account Pending Administrator Approval:</strong> Your account request has been registered. Once an administrator approves your account, you will be able to open accounts and transfer funds.</div>
       </div>
 
-      <!-- Financial Overview Banner -->
-      <section class="overview-banner">
-        <div class="banner-content">
-          <div class="tag">✳ Your Financial Overview</div>
+      <!-- Overview banner (always visible) -->
+      <div class="ov-banner" id="ovBanner">
+        <div class="ovb-left">
+          <div class="ovb-tag">✳ Your Financial Overview</div>
           <h2>Good to see you, <em id="welcomeName">User</em></h2>
-          <p>Everything in its place. Here is your double-entry account ledger.</p>
-          <div class="banner-badges">
-            <span id="rolePill">Account holder</span>
-            <span>Private workspace</span>
+          <p>Everything in its place. Here's your account overview.</p>
+          <div class="ovb-badges">
+            <span class="ovb-badge"><span class="dot-g"></span><span id="rolePill">Account holder</span></span>
+            <span class="ovb-badge">Private workspace</span>
           </div>
+          <div class="ov-counter" id="ovCounter">01 / 03</div>
         </div>
-
-        <div class="banner-emblem">
-          <div class="inner">b</div>
-        </div>
-      </section>
-
-      <!-- Stats Grid -->
-      <div class="stats-grid">
-        <div class="stat-card">
-          <div class="label">Total Balance</div>
-          <div class="value" id="totalBalDisplay">$0.00</div>
-          <div class="sub">Across all connected accounts</div>
-        </div>
-        <div class="stat-card">
-          <div class="label">Total Accounts</div>
-          <div class="value" id="totalAcctsCount">00</div>
-          <div class="sub">Active ledger accounts</div>
-        </div>
-        <div class="stat-card">
-          <div class="label">Security Status</div>
-          <div class="value" style="font-size:22px;color:#13795b" id="securityStatusDisplay">Verified Active</div>
-          <div class="sub">Idempotency & RBAC active</div>
+        <div class="ovb-emblem">
+          <div class="emblem-ring">
+            <div class="emblem-inner">b</div>
+          </div>
         </div>
       </div>
 
-      <!-- Accounts Table Card -->
-      <section class="card-section" id="accountsSection">
-        <div class="section-header">
-          <h3>Your accounts</h3>
-          <div style="display:flex;gap:8px" id="newAcctWrap">
-            <input id="cur" value="USD" maxlength="3" style="width:70px;padding:6px 10px;border-radius:6px;border:1px solid #c9d8c6;font-size:13px">
-            <button id="mkAcct" class="btn-table" style="background:#134333;color:#fff;border:0">+ Open Account</button>
+      <!-- Stat row: Total accounts + Account status -->
+      <div class="stat-row" id="statRow">
+        <div class="stat-card">
+          <div class="sc-label">Total accounts</div>
+          <div class="sc-icon">▤</div>
+          <div class="sc-val" id="totalAccts">OO</div>
+          <div class="sc-sub">Accounts connected</div>
+          <div class="sc-bar"><div class="sc-bar-fill" id="acctBar" style="width:0%"></div></div>
+        </div>
+        <div class="stat-card">
+          <div class="sc-label">Account status</div>
+          <div class="sc-icon">🛡</div>
+          <div class="sc-val" id="acctStatus" style="font-size:22px;padding-top:6px">No accounts</div>
+          <div class="sc-sub" id="acctStatusSub">0 active accounts</div>
+          <div class="sc-bar"><div class="sc-bar-fill" id="statusBar" style="width:0%;background:#13795b"></div></div>
+        </div>
+      </div>
+
+      <!-- Your accounts wide card -->
+      <div class="stat-card-wide" id="accountsSection">
+        <div class="sc-label">
+          <span>Connected — Your accounts</span>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input id="cur" value="USD" maxlength="3" style="width:60px;padding:7px 10px;border-radius:7px;border:1px solid #d2ddd0;font-size:13px;font-weight:600;text-align:center;background:#f8faf7">
+            <button id="mkAcct" class="btn-t" style="background:#0d3b2b;color:#fff;border:0;padding:7px 14px">+ Open Account</button>
           </div>
         </div>
+        <div class="sc-your-accounts" id="acctCards">
+          <div class="sc-acct-empty">Customer accounts are opened when an administrator reviews your request.</div>
+        </div>
+        <!-- Full table (populated dynamically) -->
+        <div id="acctTableWrap" style="margin-top:18px">
+          <table>
+            <thead><tr><th>Account ID</th><th>Currency</th><th>Balance</th><th>Actions</th></tr></thead>
+            <tbody id="accts"></tbody>
+          </table>
+        </div>
+      </div>
 
+      <!-- Quick actions: Deposit / Withdraw / Transfer -->
+      <div class="cs-header" style="margin:0">
+        <h3 style="font-family:var(--serif);font-size:20px;color:#0a3222;font-weight:normal">On your terms — <span style="color:var(--text-muted)">Quick actions</span></h3>
+      </div>
+      <div class="qa-row" id="actionsSection">
+        <!-- Deposit (admin only) -->
+        <div class="qa-card" id="depositBox">
+          <span class="qa-open-badge">OPEN</span>
+          <h4><span class="qa-icon">＋</span>Deposit</h4>
+          <div class="form-row">
+            <input id="depositTo" placeholder="Destination Account ID">
+            <input id="depositAmt" placeholder="Amount (e.g. 100.00)">
+          </div>
+          <button class="qa-btn" id="btnDeposit">Add funds</button>
+        </div>
+        <!-- Withdraw -->
+        <div class="qa-card">
+          <span class="qa-open-badge">OPEN</span>
+          <h4><span class="qa-icon">－</span>Withdraw</h4>
+          <div class="form-row">
+            <select id="withdrawFrom"></select>
+            <input id="withdrawAmt" placeholder="Amount (e.g. 10.00)">
+          </div>
+          <button class="qa-btn" id="btnWithdraw">Move funds out</button>
+        </div>
+        <!-- Transfer -->
+        <div class="qa-card">
+          <span class="qa-open-badge">OPEN</span>
+          <h4><span class="qa-icon">⇄</span>Transfer</h4>
+          <div class="form-row">
+            <select id="transferFrom"></select>
+            <input id="transferTo" placeholder="Destination Account ID">
+            <input id="transferAmt" placeholder="Amount (e.g. 25.00)">
+          </div>
+          <button class="qa-btn" id="btnTransfer">Between accounts</button>
+        </div>
+      </div>
+
+      <!-- Statement section -->
+      <div class="card-section" id="statementSection">
+        <div class="cs-header">
+          <h3>Statement: <span id="stFor" style="color:var(--text-muted);font-family:var(--sans);font-size:16px">Select an account above</span></h3>
+        </div>
         <table>
-          <thead>
-            <tr><th>Account ID</th><th>Currency</th><th>Balance</th><th>Actions</th></tr>
-          </thead>
-          <tbody id="accts"></tbody>
-        </table>
-      </section>
-
-      <!-- Quick Actions Grid -->
-      <section class="card-section" id="actionsSection">
-        <div class="section-header">
-          <h3>Quick actions</h3>
-          <span style="font-size:12px;color:var(--text-muted)">Protected by unique Idempotency Keys</span>
-        </div>
-
-        <div class="actions-grid">
-          <!-- Transfer -->
-          <div class="action-box">
-            <h4>⇄ Transfer</h4>
-            <div class="form-row">
-              <select id="transferFrom"></select>
-              <input id="transferTo" placeholder="Destination Account ID">
-              <input id="transferAmt" placeholder="Amount (e.g. 25.00)">
-            </div>
-            <button id="btnTransfer">Send Transfer</button>
-          </div>
-
-          <!-- Withdraw -->
-          <div class="action-box">
-            <h4>↓ Withdraw</h4>
-            <div class="form-row">
-              <select id="withdrawFrom"></select>
-              <input id="withdrawAmt" placeholder="Amount (e.g. 10.00)">
-            </div>
-            <button id="btnWithdraw">Withdraw Funds</button>
-          </div>
-
-          <!-- Admin Deposit -->
-          <div class="action-box" id="depositBox">
-            <h4>↑ Deposit (Admin Only)</h4>
-            <div class="form-row">
-              <input id="depositTo" placeholder="Destination Account ID">
-              <input id="depositAmt" placeholder="Amount (e.g. 100.00)">
-            </div>
-            <button id="btnDeposit">Fund Account</button>
-          </div>
-        </div>
-      </section>
-
-      <!-- Statements Section -->
-      <section class="card-section" id="statementSection">
-        <div class="section-header">
-          <h3>Statement: <span id="stFor" style="color:var(--text-muted)">Select an account</span></h3>
-        </div>
-        <table>
-          <thead>
-            <tr><th>#</th><th>Kind</th><th>Amount</th><th>Timestamp</th></tr>
-          </thead>
+          <thead><tr><th>#</th><th>Kind</th><th>Amount</th><th>Timestamp</th></tr></thead>
           <tbody id="stmt"></tbody>
         </table>
-      </section>
+      </div>
 
-      <!-- User Management Section (Admin Only) -->
-      <section class="card-section hide" id="userMgmtSection">
-        <div class="section-header">
-          <h3>User Management & Onboarding</h3>
-          <div style="display:flex;gap:8px">
-            <select id="userFilter" style="padding:6px 10px;border-radius:6px;border:1px solid #c9d8c6;font-size:13px">
+      <!-- User Management (admin only) -->
+      <div class="card-section hide" id="userMgmtSection">
+        <div class="cs-header">
+          <h3>User Management &amp; Onboarding</h3>
+          <div style="display:flex;gap:8px;align-items:center">
+            <select id="userFilter" style="padding:7px 12px;border-radius:7px;border:1px solid #d2ddd0;font-size:13px;background:#f8faf7">
               <option value="">All users</option>
               <option value="pending" selected>Pending approval</option>
               <option value="active">Active</option>
               <option value="disabled">Disabled</option>
             </select>
-            <button id="loadUsers" class="btn-table">Refresh</button>
+            <button id="loadUsers" class="btn-t">Refresh</button>
           </div>
         </div>
-
         <table>
-          <thead>
-            <tr><th>User ID</th><th>Name</th><th>Role</th><th>Status</th><th>Origin</th><th>Actions</th></tr>
-          </thead>
+          <thead><tr><th>User ID</th><th>Name</th><th>Role</th><th>Status</th><th>Origin</th><th>Actions</th></tr></thead>
           <tbody id="userList"></tbody>
         </table>
-      </section>
+      </div>
 
-      <!-- Oversight & Audit Section (Admin/Auditor) -->
-      <section class="card-section hide" id="oversightSection">
-        <div class="section-header">
-          <h3>Oversight & Reconciliation</h3>
+      <!-- Oversight & Audit (admin/auditor) -->
+      <div class="card-section hide" id="oversightSection">
+        <div class="cs-header">
+          <h3>Oversight &amp; Reconciliation</h3>
           <div style="display:flex;gap:8px">
-            <button id="rec" class="btn-table" style="background:#13795b;color:#fff;border:0">Reconcile Books</button>
-            <button id="aud" class="btn-table">Load Audit Log</button>
-            <button id="mkAud" class="btn-table hide">Create Auditor</button>
+            <button id="rec" class="btn-t" style="background:#13795b;color:#fff;border-color:#13795b">Reconcile Books</button>
+            <button id="aud" class="btn-t">Load Audit Log</button>
+            <button id="mkAud" class="btn-t hide">+ Create Auditor</button>
           </div>
         </div>
-
         <table>
-          <thead>
-            <tr><th>#</th><th>Action</th><th>Outcome</th><th>User ID</th></tr>
-          </thead>
+          <thead><tr><th>#</th><th>Action</th><th>Outcome</th><th>User ID</th></tr></thead>
           <tbody id="audit"></tbody>
         </table>
-      </section>
+      </div>
 
-      <!-- System Response Terminal -->
-      <section class="card-section" style="background:#09241b;color:#e8f4ec">
-        <div class="section-header">
-          <h3 style="color:#d5ebde;font-size:16px">Terminal Response</h3>
-          <button id="again" class="btn-table hide" style="background:#184a39;color:#fff;border:0">Resend Last Request</button>
+      <!-- Terminal response -->
+      <div class="terminal-card">
+        <div class="tc-header">
+          <div class="tc-dots"><span></span><span></span><span></span></div>
+          <h3>Terminal Response</h3>
+          <button id="again" class="btn-t hide" style="background:#184a39;color:#fff;border:0;font-size:12px">Resend Last</button>
         </div>
         <pre id="out">Ready.</pre>
-      </section>
+      </div>
+
     </main>
   </div>
 </div>
@@ -585,10 +726,11 @@ pre#out.err{border-left:5px solid #f04438}
 <script>
 "use strict";
 const $ = id => document.getElementById(id);
-let token = sessionStorage.getItem("ll_token"), role = null, status = null, currentUserId = null, last = null, accounts = [];
+let token = sessionStorage.getItem("ll_token"),
+    role = null, status = null, currentUserId = null, last = null, accounts = [];
 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now() + "-" + Math.random().toString(16).slice(2));
-const money = (n, cur) => (n < 0 ? "-" : "") + (Math.abs(n) / 100).toFixed(2) + (cur ? " " + cur : "");
+const money = (n, cur) => (n < 0 ? "-" : "") + "$" + (Math.abs(n) / 100).toFixed(2) + (cur ? " " + cur : "");
 const cell = (tr, text) => { const td = document.createElement("td"); td.textContent = String(text ?? ""); tr.appendChild(td); return td; };
 
 async function api(method, path, body, key) {
@@ -611,42 +753,56 @@ function parseAmount(s) {
   return m ? parseInt(m[1], 10) * 100 + parseInt((m[2] || "0").padEnd(2, "0"), 10) : null;
 }
 
+// Auth tab switching
+function switchAuthTab(isSignUp) {
+  $("tabSignIn").classList.toggle("active", !isSignUp);
+  $("tabSignUp").classList.toggle("active", isSignUp);
+  $("viewSignIn").classList.toggle("hide", isSignUp);
+  $("viewSignUp").classList.toggle("hide", !isSignUp);
+  $("loginOut").classList.add("hide");
+}
+$("tabSignIn").onclick = () => switchAuthTab(false);
+$("tabSignUp").onclick = () => switchAuthTab(true);
+$("linkGoSignUp").onclick = () => switchAuthTab(true);
+$("linkGoSignIn").onclick = () => switchAuthTab(false);
+
 async function login() {
   const r = await api("GET", "/me");
   if (r.status !== 200) {
-    token = null;
-    sessionStorage.removeItem("ll_token");
-    $("loginOut").textContent = r.status + ": " + JSON.stringify(r.data);
+    token = null; sessionStorage.removeItem("ll_token");
+    $("loginOut").textContent = r.status + ": " + (r.data.error || JSON.stringify(r.data));
     $("loginOut").classList.remove("hide");
     return;
   }
   currentUserId = r.data.user_id;
   role = r.data.role;
   status = r.data.status || "active";
-  const name = r.data.display_name || (role === "admin" ? "Administrator" : "User");
+  const name = r.data.display_name || (role === "admin" ? "Administrator" : "Account Holder");
+  const first = name.split(" ")[0];
 
-  $("userNameLabel").textContent = name;
-  $("welcomeName").textContent = name.split(" ")[0];
-  $("userRoleBadge").textContent = `${role} • ${status}`;
-  $("rolePill").textContent = `${role.toUpperCase()}`;
-  $("userAvatar").textContent = name[0].toUpperCase();
+  $("uName").textContent = name;
+  $("uAvatar").textContent = name[0].toUpperCase();
+  $("uRole").textContent = role.charAt(0).toUpperCase() + role.slice(1);
+  $("welcomeName").textContent = first;
+  $("rolePill").textContent = role === "admin" ? "Account holder · Admin" : "Account holder";
 
-  $("loginScreen").classList.add("hide");
-  $("dashboardScreen").classList.remove("hide");
+  $("authScreen").classList.add("hide");
+  $("dashScreen").classList.remove("hide");
 
   const isPending = status === "pending";
   $("pendingBanner").classList.toggle("hide", !isPending);
   $("accountsSection").classList.toggle("hide", isPending);
   $("actionsSection").classList.toggle("hide", isPending || role === "auditor");
   $("statementSection").classList.toggle("hide", isPending);
+  $("statRow").classList.toggle("hide", isPending);
 
   const isAdmin = role === "admin";
-  const oversee = role !== "holder";
+  const isOverseer = role !== "holder";
   $("depositBox").classList.toggle("hide", !isAdmin);
   $("userMgmtSection").classList.toggle("hide", !isAdmin);
   $("navUserMgmt").classList.toggle("hide", !isAdmin);
-  $("oversightSection").classList.toggle("hide", !oversee);
-  $("navOversight").classList.toggle("hide", !oversee);
+  $("oversightSection").classList.toggle("hide", !isOverseer);
+  $("navOversight").classList.toggle("hide", !isOverseer);
   $("mkAud").classList.toggle("hide", !isAdmin);
 
   if (!isPending) {
@@ -660,42 +816,59 @@ async function refresh() {
   if (r.status !== 200) return show(r);
   accounts = r.data;
 
-  $("totalAcctsCount").textContent = String(accounts.length).padStart(2, "0");
-  let totalMinor = 0;
+  const count = accounts.length;
+  $("totalAccts").textContent = String(count).padStart(2, "0");
+  $("acctBar").style.width = Math.min(count * 20, 100) + "%";
 
+  if (count > 0) {
+    $("acctStatus").textContent = "Active";
+    $("acctStatus").style.color = "#13795b";
+    $("acctStatusSub").textContent = count + " active account" + (count === 1 ? "" : "s");
+    $("statusBar").style.width = "100%";
+  } else {
+    $("acctStatus").textContent = "No accounts";
+    $("acctStatus").style.color = "#0a3222";
+    $("acctStatusSub").textContent = "0 active accounts";
+  }
+
+  // Update small account cards
+  const cardsWrap = $("acctCards"); cardsWrap.replaceChildren();
+  if (count === 0) {
+    cardsWrap.innerHTML = '<div class="sc-acct-empty">Customer accounts are opened when an administrator reviews your request.</div>';
+  } else {
+    for (const a of accounts) {
+      const d = document.createElement("div"); d.className = "sc-acct-item";
+      d.innerHTML = `<div class="ait">${a.account_id.slice(0, 8)}…</div><div class="aiv">${money(a.balance, a.currency)}</div>`;
+      cardsWrap.appendChild(d);
+    }
+  }
+
+  // Update full table
   const tbody = $("accts"); tbody.replaceChildren();
   const trFrom = $("transferFrom"); trFrom.replaceChildren();
   const wFrom = $("withdrawFrom"); wFrom.replaceChildren();
 
   for (const a of accounts) {
-    totalMinor += a.balance;
     const tr = document.createElement("tr");
     cell(tr, a.account_id);
     cell(tr, a.currency);
-    const balCell = cell(tr, money(a.balance, a.currency));
-    balCell.style.fontWeight = "bold";
+    const bc = cell(tr, money(a.balance, a.currency));
+    bc.style.fontWeight = "bold";
+    bc.style.color = a.balance < 0 ? "#b42318" : "#0a3222";
 
     const td = document.createElement("td");
     const btn = document.createElement("button");
-    btn.className = "btn-table";
-    btn.textContent = "View Statement";
+    btn.className = "btn-t"; btn.textContent = "View Statement";
     btn.onclick = () => statement(a.account_id);
-    td.appendChild(btn);
-    tr.appendChild(td);
-    tbody.appendChild(tr);
+    td.appendChild(btn); tr.appendChild(td); tbody.appendChild(tr);
 
-    const o1 = document.createElement("option");
-    o1.value = a.account_id;
-    o1.textContent = a.account_id.slice(0, 8) + "… (" + money(a.balance, a.currency) + ")";
-    trFrom.appendChild(o1);
-
-    const o2 = document.createElement("option");
-    o2.value = a.account_id;
-    o2.textContent = a.account_id.slice(0, 8) + "… (" + money(a.balance, a.currency) + ")";
-    wFrom.appendChild(o2);
+    [trFrom, wFrom].forEach(sel => {
+      const o = document.createElement("option");
+      o.value = a.account_id;
+      o.textContent = a.account_id.slice(0, 8) + "… (" + money(a.balance, a.currency) + ")";
+      sel.appendChild(o);
+    });
   }
-
-  $("totalBalDisplay").textContent = money(totalMinor, "USD");
 }
 
 async function statement(id) {
@@ -707,125 +880,99 @@ async function statement(id) {
     const tr = document.createElement("tr");
     cell(tr, e.id);
     cell(tr, e.kind);
-    const amtCell = cell(tr, money(e.amount));
-    amtCell.style.color = e.amount < 0 ? "#b42318" : "#13795b";
-    amtCell.style.fontWeight = "bold";
+    const ac = cell(tr, money(e.amount));
+    ac.style.fontWeight = "bold";
+    ac.style.color = e.amount < 0 ? "#b42318" : "#13795b";
     cell(tr, new Date(e.created_at * 1000).toLocaleString());
     b.appendChild(tr);
   }
+  $("statementSection").scrollIntoView({behavior: "smooth"});
 }
 
 async function send(req) {
   const res = await api("POST", req.path, req.body, req.key);
-  show(res);
-  $("again").classList.remove("hide");
-  await refresh();
+  show(res); $("again").classList.remove("hide"); await refresh();
 }
 
 async function loadUsers() {
   const st = $("userFilter").value;
-  const path = "/admin/users" + (st ? "?status=" + encodeURIComponent(st) : "");
-  const r = await api("GET", path);
+  const r = await api("GET", "/admin/users" + (st ? "?status=" + encodeURIComponent(st) : ""));
   if (r.status !== 200) return show(r);
   const body = $("userList"); body.replaceChildren();
-
   for (const u of r.data) {
     const tr = document.createElement("tr");
     cell(tr, u.user_id.slice(0, 8) + "…");
     cell(tr, u.display_name || "—");
     cell(tr, u.role);
-    const stCell = cell(tr, u.status);
-    stCell.style.fontWeight = "bold";
-    if (u.status === "pending") stCell.style.color = "var(--warn)";
-    if (u.status === "disabled") stCell.style.color = "var(--err)";
+    const sc = cell(tr, u.status); sc.style.fontWeight = "bold";
+    if (u.status === "pending") sc.style.color = "var(--warn)";
+    if (u.status === "disabled") sc.style.color = "var(--err)";
+    if (u.status === "active") sc.style.color = "var(--ok)";
     cell(tr, u.origin);
-
     const td = document.createElement("td");
     if (u.user_id !== currentUserId) {
       if (u.status === "pending") {
-        const btn = document.createElement("button");
-        btn.className = "btn-table approve";
-        btn.textContent = "Approve";
-        btn.onclick = async () => {
-          show(await api("POST", `/admin/users/${u.user_id}/status`, {status: "active"}));
-          loadUsers();
-        };
-        td.appendChild(btn);
+        const b = document.createElement("button"); b.className = "btn-t approve"; b.textContent = "Approve";
+        b.onclick = async () => { show(await api("POST", `/admin/users/${u.user_id}/status`, {status: "active"})); loadUsers(); };
+        td.appendChild(b);
       } else if (u.status === "active") {
-        const btn = document.createElement("button");
-        btn.className = "btn-table danger";
-        btn.textContent = "Disable";
-        btn.onclick = async () => {
-          show(await api("POST", `/admin/users/${u.user_id}/status`, {status: "disabled"}));
-          loadUsers();
-        };
-        td.appendChild(btn);
+        const b = document.createElement("button"); b.className = "btn-t danger"; b.textContent = "Disable";
+        b.onclick = async () => { show(await api("POST", `/admin/users/${u.user_id}/status`, {status: "disabled"})); loadUsers(); };
+        td.appendChild(b);
       } else if (u.status === "disabled") {
-        const btn = document.createElement("button");
-        btn.className = "btn-table";
-        btn.textContent = "Re-enable";
-        btn.onclick = async () => {
-          show(await api("POST", `/admin/users/${u.user_id}/status`, {status: "active"}));
-          loadUsers();
-        };
-        td.appendChild(btn);
+        const b = document.createElement("button"); b.className = "btn-t"; b.textContent = "Re-enable";
+        b.onclick = async () => { show(await api("POST", `/admin/users/${u.user_id}/status`, {status: "active"})); loadUsers(); };
+        td.appendChild(b);
       }
     } else {
-      const sp = document.createElement("span");
-      sp.textContent = "(You)";
-      sp.style.color = "var(--text-muted)";
+      const sp = document.createElement("span"); sp.textContent = "(You)"; sp.style.color = "var(--text-muted)";
       td.appendChild(sp);
     }
-    tr.appendChild(td);
-    body.appendChild(tr);
+    tr.appendChild(td); body.appendChild(tr);
   }
 }
 
-// Event Listeners
-$("signin").onclick = () => {
-  token = $("tok").value.trim();
-  sessionStorage.setItem("ll_token", token);
-  login();
-};
+// Event wiring
+$("signin").onclick = () => { token = $("tok").value.trim(); sessionStorage.setItem("ll_token", token); login(); };
 
 $("signup").onclick = async () => {
   const name = $("dispName").value.trim() || undefined;
   const r = await api("POST", "/users", name ? {display_name: name} : undefined);
   show(r);
   if (r.status === 201) {
+    $("modalToken").textContent = r.data.token;
+    $("modalStatus").textContent = "Account Status: " + r.data.status.toUpperCase();
+    $("tokenModal").classList.remove("hide");
     $("tok").value = r.data.token;
-    $("loginOut").textContent = "Token generated! Save this token now:\n" + r.data.token + "\nStatus: " + r.data.status;
-    $("loginOut").classList.remove("hide");
   }
 };
 
-$("logout").onclick = () => {
-  sessionStorage.removeItem("ll_token");
-  location.reload();
-};
+$("modalProceed").onclick = () => { $("tokenModal").classList.add("hide"); switchAuthTab(false); };
+
+$("logout").onclick = () => { sessionStorage.removeItem("ll_token"); location.reload(); };
 
 $("mkAcct").onclick = async () => {
-  show(await api("POST", "/accounts", {currency: $("cur").value}));
+  show(await api("POST", "/accounts", {currency: $("cur").value.toUpperCase() || "USD"}));
   refresh();
 };
 
 $("btnTransfer").onclick = () => {
   const amt = parseAmount($("transferAmt").value);
-  if (!amt || amt <= 0) return show({status: 400, data: {error: "enter amount like 12.50"}});
+  if (!amt || amt <= 0) return show({status: 400, data: {error: "Enter amount like 25.00"}});
   last = {path: "/transfers", body: {from: $("transferFrom").value, to: $("transferTo").value.trim(), amount: amt}, key: uid()};
   send(last);
 };
 
 $("btnWithdraw").onclick = () => {
   const amt = parseAmount($("withdrawAmt").value);
-  if (!amt || amt <= 0) return show({status: 400, data: {error: "enter amount like 10.00"}});
+  if (!amt || amt <= 0) return show({status: 400, data: {error: "Enter amount like 10.00"}});
   last = {path: "/withdrawals", body: {account_id: $("withdrawFrom").value, amount: amt}, key: uid()};
   send(last);
 };
 
 $("btnDeposit").onclick = () => {
   const amt = parseAmount($("depositAmt").value);
-  if (!amt || amt <= 0) return show({status: 400, data: {error: "enter amount like 50.00"}});
+  if (!amt || amt <= 0) return show({status: 400, data: {error: "Enter amount like 100.00"}});
   last = {path: "/deposits", body: {account_id: $("depositTo").value.trim(), amount: amt}, key: uid()};
   send(last);
 };
@@ -838,9 +985,7 @@ $("aud").onclick = async () => {
   const b = $("audit"); b.replaceChildren();
   for (const e of r.data) {
     const tr = document.createElement("tr");
-    cell(tr, e.id);
-    cell(tr, e.action);
-    cell(tr, e.outcome);
+    cell(tr, e.id); cell(tr, e.action); cell(tr, e.outcome);
     cell(tr, (e.user_id || "").slice(0, 8));
     b.appendChild(tr);
   }
@@ -849,28 +994,25 @@ $("aud").onclick = async () => {
 $("mkAud").onclick = async () => {
   const r = await api("POST", "/admin/users", {role: "auditor"});
   show(r);
-  if (r.status === 201) alert("Auditor Token:\n" + r.data.token);
+  if (r.status === 201) alert("Auditor Token (save this!):\n\n" + r.data.token);
 };
 
 $("loadUsers").onclick = () => loadUsers();
 $("userFilter").onchange = () => loadUsers();
 
-// Sidebar Navigation
-$("navOverview").onclick = () => {
-  window.scrollTo({top: 0, behavior: "smooth"});
-};
-$("navAccounts").onclick = () => {
-  $("accountsSection").scrollIntoView({behavior: "smooth"});
-};
-$("navStatements").onclick = () => {
-  $("statementSection").scrollIntoView({behavior: "smooth"});
-};
-$("navUserMgmt").onclick = () => {
-  $("userMgmtSection").scrollIntoView({behavior: "smooth"});
-};
-$("navOversight").onclick = () => {
-  $("oversightSection").scrollIntoView({behavior: "smooth"});
-};
+// Sidebar nav
+const navMap = {navOverview: null, navAccounts: "accountsSection", navStatements: "statementSection", navUserMgmt: "userMgmtSection", navOversight: "oversightSection"};
+Object.keys(navMap).forEach(navId => {
+  const el = $(navId); if (!el) return;
+  el.onclick = () => {
+    document.querySelectorAll(".nav-item").forEach(n => n.classList.remove("active"));
+    el.classList.add("active");
+    const target = navMap[navId];
+    if (target) $(target).scrollIntoView({behavior: "smooth"});
+    else window.scrollTo({top: 0, behavior: "smooth"});
+    $("bcPage").textContent = el.querySelector("span:nth-child(2)")?.textContent || "Overview";
+  };
+});
 
 if (token) login();
 </script>
