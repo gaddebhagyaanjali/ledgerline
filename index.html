@@ -3,87 +3,590 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>LedgerLine</title>
+<title>BalanceVault — Money movement with a ledger you can prove</title>
 <style>
-:root{--bg:#f5f6f8;--card:#fff;--fg:#1b1f24;--mut:#5b6573;--line:#dfe3e8;--acc:#1f5fd1;--ok:#13795b;--err:#b42318;--warn:#b54708}
-@media (prefers-color-scheme:dark){:root{--bg:#12151a;--card:#1b2028;--fg:#e8ebf0;--mut:#9aa5b4;--line:#2c3440;--acc:#6ea0ff;--ok:#4cc9a0;--err:#ff8a80;--warn:#fec84b}}
-*{box-sizing:border-box}body{margin:0;font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
-header{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;background:var(--card);border-bottom:1px solid var(--line)}
-h1{font-size:18px;margin:0}h2{font-size:15px;margin:0 0 10px}
-main{max-width:980px;margin:20px auto;padding:0 16px;display:grid;gap:16px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px}
-.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-input,select,button{font:inherit;padding:8px 10px;border-radius:7px;border:1px solid var(--line);background:var(--bg);color:var(--fg)}
-input{min-width:0;flex:1}button{cursor:pointer;background:var(--acc);color:#fff;border:0}button.sec{background:transparent;color:var(--acc);border:1px solid var(--acc)}
-button.danger{background:transparent;color:var(--err);border:1px solid var(--err)}
-button.approve{background:var(--ok);color:#fff;border:0}
-table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);word-break:break-all}
-.mut{color:var(--mut);font-size:13px}.badge{background:var(--acc);color:#fff;border-radius:99px;padding:2px 10px;font-size:12px;margin-left:8px}
-.badge.pending{background:var(--warn);color:#000}
-.badge.disabled{background:var(--err);color:#fff}
-pre{margin:8px 0 0;padding:10px;border-radius:7px;background:var(--bg);border:1px solid var(--line);white-space:pre-wrap;word-break:break-all;font-size:12px;max-height:260px;overflow:auto}
-.ok{border-left:4px solid var(--ok)}.err{border-left:4px solid var(--err)}.warn{border-left:4px solid var(--warn)}.hide{display:none}
+:root{
+  --dark:#0a291f;
+  --dark-surface:#0f382a;
+  --dark-card:#144434;
+  --forest:#184a39;
+  --accent-green:#13795b;
+  --sage-bg:#eef5ec;
+  --sage-card:#e2ede0;
+  --sage-border:#cfe0cd;
+  --text-dark:#112019;
+  --text-muted:#5b7065;
+  --bg-light:#f8faf7;
+  --card-light:#ffffff;
+  --line-light:#e5eae3;
+  --font-serif: Georgia, "Times New Roman", Cambria, serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --ok:#13795b;
+  --err:#b42318;
+  --warn:#b54708;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-sans);background:var(--bg-light);color:var(--text-dark);line-height:1.5;min-height:100vh}
+
+/* =========================================================
+   LOGIN SCREEN (Split Layout matching BalanceVault design)
+   ========================================================= */
+#loginScreen{display:grid;grid-template-columns:1fr 1fr;min-height:100vh}
+@media (max-width:880px){#loginScreen{grid-template-columns:1fr}}
+
+.login-brand-pane{
+  background:linear-gradient(160deg, #072219 0%, #0d382b 60%, #124737 100%);
+  color:#fff;
+  padding:48px;
+  display:flex;
+  flex-direction:column;
+  justify-content:space-between;
+  position:relative;
+  overflow:hidden;
+}
+.brand-badge-top{
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  font-size:13px;
+  letter-spacing:1px;
+  text-transform:uppercase;
+  color:#86bfa8;
+}
+.brand-badge-top .logo-icon{
+  width:32px;height:32px;border-radius:8px;background:#e5f0e3;color:#0e382b;
+  font-family:var(--font-serif);font-size:20px;font-weight:bold;
+  display:flex;align-items:center;justify-content:center;
+}
+.login-hero-text h1{
+  font-family:var(--font-serif);
+  font-size:48px;
+  font-weight:normal;
+  line-height:1.15;
+  margin:24px 0 16px;
+  color:#f4faf5;
+}
+.login-hero-text h1 em{font-style:italic;color:#b4e3ce}
+.login-hero-text p{
+  font-size:16px;
+  color:#a5cfbd;
+  max-width:440px;
+  line-height:1.6;
+}
+
+/* Card graphic inside login */
+.vault-card-graphic{
+  margin:36px 0;
+  background:linear-gradient(135deg, #d8ead5 0%, #c1dec0 100%);
+  color:#0f382a;
+  border-radius:18px;
+  padding:24px 28px;
+  max-width:400px;
+  box-shadow:0 20px 40px rgba(0,0,0,0.25);
+  border:1px solid rgba(255,255,255,0.4);
+}
+.vc-header{display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:bold;letter-spacing:0.5px}
+.vc-tag{background:rgba(15,56,42,0.12);padding:3px 10px;border-radius:99px}
+.vc-body{margin:28px 0 16px}
+.vc-body .title{font-size:13px;letter-spacing:1.5px;text-transform:uppercase;color:#2c5b4b}
+.vc-footer{display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:600}
+.vc-pill{background:#0e382b;color:#e8f5e6;padding:4px 12px;border-radius:99px;font-size:11px}
+
+.brand-footer-text{
+  display:flex;justify-content:space-between;font-size:12px;color:#78a995;
+  border-top:1px solid rgba(255,255,255,0.1);padding-top:20px;
+}
+
+/* Right Pane: Form */
+.login-form-pane{
+  background:#fff;
+  padding:60px 48px;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  max-width:540px;
+  margin:0 auto;
+  width:100%;
+}
+.login-form-pane h2{font-family:var(--font-serif);font-size:34px;color:#0e382b;margin-bottom:6px;font-weight:normal}
+.login-form-pane .subtitle{color:var(--text-muted);font-size:14px;margin-bottom:32px}
+.form-group{margin-bottom:18px}
+.form-group label{display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:#243e33}
+.form-group input{
+  width:100%;padding:12px 14px;font-size:15px;border-radius:9px;
+  border:1px solid #d4dfd2;background:#f9fbf9;color:#112019;transition:all 0.2s;
+}
+.form-group input:focus{outline:none;border-color:#184a39;background:#fff;box-shadow:0 0 0 3px rgba(24,74,57,0.12)}
+.btn-primary{
+  width:100%;padding:13px;border-radius:9px;background:#134333;color:#fff;
+  font-size:15px;font-weight:600;border:0;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;
+  transition:background 0.2s;
+}
+.btn-primary:hover{background:#0b2e23}
+.btn-secondary{
+  width:100%;padding:11px;border-radius:9px;background:transparent;color:#134333;
+  font-size:14px;font-weight:600;border:1px solid #c2d6c1;cursor:pointer;margin-top:10px;
+}
+.btn-secondary:hover{background:#f0f6ee}
+.login-security-notice{
+  margin-top:36px;padding:14px;background:#f3f7f2;border-radius:8px;
+  font-size:12px;color:#456355;display:flex;gap:10px;line-height:1.5;
+}
+
+/* =========================================================
+   DASHBOARD SCREEN (Sidebar + Workspace matching demo)
+   ========================================================= */
+#dashboardScreen{display:flex;min-height:100vh}
+.sidebar{
+  width:240px;background:#09241b;color:#e8f4ec;padding:24px 16px;
+  display:flex;flex-direction:column;justify-content:space-between;flex-shrink:0;
+}
+@media (max-width:960px){.sidebar{display:none}}
+
+.sidebar-logo{display:flex;align-items:center;gap:10px;padding:4px 8px 24px;border-bottom:1px solid rgba(255,255,255,0.08)}
+.sidebar-logo .icon{width:30px;height:30px;border-radius:7px;background:#e2f2df;color:#09241b;font-family:var(--font-serif);font-weight:bold;font-size:18px;display:flex;align-items:center;justify-content:center}
+.sidebar-logo .name{font-family:var(--font-sans);font-weight:700;font-size:16px;letter-spacing:-0.3px;color:#fff}
+
+.sidebar-nav-title{font-size:11px;letter-spacing:1.2px;text-transform:uppercase;color:#6b9a87;margin:24px 8px 8px}
+.nav-item{
+  display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;
+  color:#cde3d6;font-size:14px;font-weight:500;cursor:pointer;margin-bottom:4px;transition:all 0.15s;
+}
+.nav-item:hover{background:rgba(255,255,255,0.07);color:#fff}
+.nav-item.active{background:#164232;color:#fff;font-weight:600}
+
+.sidebar-bottom-badge{
+  background:#11382a;border-radius:12px;padding:14px;font-size:12px;color:#9bc4b0;
+  border:1px solid rgba(255,255,255,0.05);
+}
+.sidebar-bottom-badge strong{display:block;color:#f0f9f3;font-size:13px;margin-bottom:2px}
+
+/* Main Content Area */
+.main-wrapper{flex:1;display:flex;flex-direction:column;background:#f7f9f6;min-width:0}
+.top-nav{
+  height:64px;background:#fff;border-bottom:1px solid var(--line-light);
+  display:flex;align-items:center;justify-content:space-between;padding:0 32px;
+}
+.breadcrumbs{font-size:13px;color:var(--text-muted);display:flex;align-items:center;gap:8px}
+.breadcrumbs strong{color:var(--text-dark)}
+.top-right{display:flex;align-items:center;gap:18px}
+.status-pill{
+  display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#13795b;
+  background:#e8f7ee;padding:4px 10px;border-radius:99px;font-weight:500;
+}
+.status-pill .dot{width:7px;height:7px;border-radius:50%;background:#13795b}
+.user-chip{display:flex;align-items:center;gap:10px;padding:4px 10px;border-radius:8px;background:#f3f7f2}
+.user-chip .avatar{width:28px;height:28px;border-radius:50%;background:#184a39;color:#fff;font-size:12px;font-weight:bold;display:flex;align-items:center;justify-content:center}
+.user-chip .details{display:flex;flex-direction:column;font-size:12px}
+.user-chip .details .name{font-weight:600;color:#112019}
+.user-chip .details .role{font-size:11px;color:var(--text-muted)}
+.btn-logout{background:transparent;border:1px solid #d4dfd2;padding:6px 12px;border-radius:7px;font-size:12px;cursor:pointer;color:#456355}
+.btn-logout:hover{background:#eaeaea}
+
+/* Workspace Canvas */
+.workspace-canvas{padding:32px;max-width:1140px;margin:0 auto;width:100%;display:grid;gap:24px}
+
+/* Financial Overview Banner */
+.overview-banner{
+  background:linear-gradient(135deg, #e7f2e5 0%, #d8ebd4 100%);
+  border:1px solid #c8e0c4;
+  border-radius:18px;
+  padding:32px 36px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  position:relative;
+  overflow:hidden;
+}
+.banner-content .tag{font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:#3b6e58;font-weight:700}
+.banner-content h2{font-family:var(--font-serif);font-size:36px;color:#0e382b;margin:8px 0;font-weight:normal}
+.banner-content h2 em{font-style:italic;font-family:var(--font-serif)}
+.banner-content p{color:#436a59;font-size:15px;margin-bottom:14px}
+.banner-badges{display:flex;gap:12px;font-size:12px;color:#2c5b48;font-weight:600}
+.banner-badges span{background:rgba(255,255,255,0.6);padding:4px 12px;border-radius:99px}
+.banner-emblem{
+  width:96px;height:96px;border-radius:50%;border:2px solid rgba(24,74,57,0.2);
+  display:flex;align-items:center;justify-content:center;position:relative;flex-shrink:0;
+}
+.banner-emblem .inner{
+  width:64px;height:64px;border-radius:50%;background:#cbe4c6;color:#0e382b;
+  font-family:var(--font-serif);font-size:36px;font-weight:bold;
+  display:flex;align-items:center;justify-content:center;
+}
+
+/* Stat Cards */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit, minmax(260px, 1fr));gap:16px}
+.stat-card{background:#fff;border:1px solid var(--line-light);border-radius:14px;padding:22px;display:flex;flex-direction:column;justify-content:space-between}
+.stat-card .label{font-size:12px;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-muted);font-weight:600;margin-bottom:12px}
+.stat-card .value{font-size:28px;font-weight:700;color:#0e382b;letter-spacing:-0.5px}
+.stat-card .sub{font-size:13px;color:#527364;margin-top:4px}
+
+/* App Sections */
+.card-section{background:#fff;border:1px solid var(--line-light);border-radius:16px;padding:26px;box-shadow:0 2px 4px rgba(0,0,0,0.02)}
+.card-section .section-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
+.card-section h3{font-family:var(--font-serif);font-size:20px;color:#0e382b;font-weight:normal}
+
+/* Tables */
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:10px 12px;background:#f7faf6;color:#456355;font-weight:600;border-bottom:1px solid var(--line-light);border-top:1px solid var(--line-light)}
+td{padding:12px;border-bottom:1px solid var(--line-light);color:#192f24;word-break:break-all}
+tr:hover td{background:#fafcf9}
+
+/* Action Buttons in Tables */
+button.btn-table{padding:5px 10px;border-radius:6px;font-size:12px;cursor:pointer;font-weight:500;border:1px solid #c8d9c5;background:#fff;color:#184a39}
+button.btn-table:hover{background:#edf4ec}
+button.btn-table.danger{border-color:#f1b2ae;color:#b42318;background:#fff}
+button.btn-table.danger:hover{background:#fdf2f2}
+button.btn-table.approve{background:#13795b;color:#fff;border-color:#13795b}
+button.btn-table.approve:hover{background:#0e5e46}
+
+/* Quick Actions Grid */
+.actions-grid{display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:16px;margin-top:16px}
+.action-box{background:#f9fbf9;border:1px solid var(--line-light);border-radius:12px;padding:18px}
+.action-box h4{font-size:15px;color:#0e382b;margin-bottom:12px;display:flex;align-items:center;gap:6px}
+.action-box .form-row{display:grid;gap:10px;margin-bottom:10px}
+.action-box input, .action-box select{
+  width:100%;padding:9px 12px;border-radius:7px;border:1px solid #d4dfd2;background:#fff;font-size:13px;
+}
+.action-box button{
+  width:100%;padding:9px;border-radius:7px;background:#184a39;color:#fff;font-weight:600;font-size:13px;border:0;cursor:pointer;
+}
+.action-box button:hover{background:#0f382a}
+
+/* Banner Notices */
+.alert-banner{padding:16px 20px;border-radius:12px;font-size:14px;margin-bottom:20px;display:flex;align-items:center;gap:12px}
+.alert-banner.warn{background:#fff8e6;border:1px solid #fedf89;color:#8f4700}
+.alert-banner.ok{background:#edf9f0;border:1px solid #b7e8c3;color:#0e583c}
+
+/* Response Terminal */
+pre#out{
+  background:#09241b;color:#a5cfbd;padding:16px;border-radius:10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:12px;overflow:auto;max-height:220px;white-space:pre-wrap;margin-top:8px;border:1px solid #144434;
+}
+pre#out.ok{border-left:5px solid #13795b}
+pre#out.err{border-left:5px solid #f04438}
+
+.hide{display:none !important}
 </style>
 </head>
 <body>
-<header><h1>LedgerLine <span id="badge" class="badge hide"></span></h1><button id="logout" class="sec hide">Sign out</button></header>
-<main>
- <section class="card" id="loginCard">
-  <h2>Sign in</h2>
-  <div class="row">
-   <input id="tok" type="password" placeholder="Paste your access token" autocomplete="off">
-   <button id="signin">Sign in</button>
+
+<!-- ========================================================
+     1. LOGIN & SIGNUP SCREEN (Split Layout)
+     ======================================================== -->
+<div id="loginScreen">
+  <div class="login-brand-pane">
+    <div>
+      <div class="brand-badge-top">
+        <span class="logo-icon">b</span>
+        <span>BalanceVault • Private Ledger</span>
+      </div>
+      <div class="login-hero-text">
+        <p style="text-transform:uppercase;letter-spacing:1.5px;font-size:12px;color:#85bfa7;font-weight:bold">Money, accounted for.</p>
+        <h1>Confidence in<br>every <em>transaction.</em></h1>
+        <p>A clearer view of your accounts, built on a double-entry ledger where every entry has its place.</p>
+      </div>
+
+      <div class="vault-card-graphic">
+        <div class="vc-header">
+          <span>BV / PRIVATE LEDGER</span>
+          <span class="vc-tag">01 Verified access</span>
+        </div>
+        <div class="vc-body">
+          <div class="title">Cryptographically Auditable</div>
+          <div style="font-size:24px;font-weight:bold;margin-top:4px">Provable Zero-Sum</div>
+        </div>
+        <div class="vc-footer">
+          <span>SECURE BY DESIGN</span>
+          <span class="vc-pill">✓ Every entry accountable</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="brand-footer-text">
+      <span>Private by design</span>
+      <span>Built around financial integrity</span>
+    </div>
   </div>
-  <div class="row" style="margin-top:10px">
-   <input id="dispName" placeholder="Display name (optional, e.g. Alice)" style="max-width:240px">
-   <button id="signup" class="sec">Sign up as account holder</button>
+
+  <div class="login-form-pane">
+    <h2>Sign in to your vault</h2>
+    <p class="subtitle">Your accounts, clearly in view.</p>
+
+    <div class="form-group">
+      <label for="tok">Access Token</label>
+      <input id="tok" type="password" placeholder="Paste your access token" autocomplete="off">
+    </div>
+    <button id="signin" class="btn-primary">Sign in →</button>
+
+    <div style="margin:24px 0 16px;text-align:center;font-size:13px;color:#6b877a;position:relative">
+      <span style="background:#fff;padding:0 10px;position:relative;z-index:1">or register as account holder</span>
+      <div style="position:absolute;top:50%;left:0;right:0;height:1px;background:#e2ebe0;z-index:0"></div>
+    </div>
+
+    <div class="form-group">
+      <label for="dispName">Display Name (optional)</label>
+      <input id="dispName" placeholder="e.g. Alice or Gadde">
+    </div>
+    <button id="signup" class="btn-secondary">Create an account</button>
+
+    <div class="login-security-notice">
+      <span>🔒</span>
+      <span>Your connection is protected. Tokens are cryptographically hashed using SHA-256 and verified through timing-safe comparison.</span>
+    </div>
+
+    <div style="margin-top:20px">
+      <pre id="loginOut" class="hide" style="font-size:11px;padding:8px;border-radius:6px;background:#f3f7f2"></pre>
+    </div>
   </div>
-  <p class="mut">Tokens are shown once at sign-up. Save yours; it is the only way back in.</p>
- </section>
- <div id="app" class="hide">
-  <div id="pendingBanner" class="card warn hide">
-   <strong>Account Pending Approval:</strong> Your registration has been received and is waiting for administrator approval before you can open accounts or move money.
+</div>
+
+
+<!-- ========================================================
+     2. DASHBOARD SCREEN (Sidebar + Workspace)
+     ======================================================== -->
+<div id="dashboardScreen" class="hide">
+  <!-- Left Sidebar -->
+  <aside class="sidebar">
+    <div>
+      <div class="sidebar-logo">
+        <span class="icon">b</span>
+        <span class="name">balancevault</span>
+      </div>
+
+      <div class="sidebar-nav-title">Workspace</div>
+      <div class="nav-item active" id="navOverview">
+        <span>⊞</span> <span>Overview</span>
+      </div>
+      <div class="nav-item" id="navAccounts">
+        <span>💳</span> <span>Accounts</span>
+      </div>
+      <div class="nav-item" id="navStatements">
+        <span>📈</span> <span>Statements</span>
+      </div>
+      <div class="nav-item hide" id="navUserMgmt">
+        <span>👥</span> <span>User Management</span>
+      </div>
+      <div class="nav-item hide" id="navOversight">
+        <span>🛡️</span> <span>Oversight & Audit</span>
+      </div>
+    </div>
+
+    <div>
+      <div class="sidebar-bottom-badge">
+        <strong>Protected ledger</strong>
+        <span>Secure by design ✓</span>
+      </div>
+      <div style="font-size:11px;color:#5b8773;margin-top:12px;text-align:center">
+        BALANCEVAULT • PRIVATE
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Wrapper -->
+  <div class="main-wrapper">
+    <!-- Top Nav -->
+    <header class="top-nav">
+      <div class="breadcrumbs">
+        <span>Workspace</span> / <strong id="bcPage">Overview</strong>
+      </div>
+
+      <div class="top-right">
+        <div class="status-pill">
+          <span class="dot"></span>
+          <span>Systems operational</span>
+        </div>
+
+        <div class="user-chip">
+          <div class="avatar" id="userAvatar">U</div>
+          <div class="details">
+            <span class="name" id="userNameLabel">Account User</span>
+            <span class="role" id="userRoleBadge">Holder • active</span>
+          </div>
+        </div>
+
+        <button id="logout" class="btn-logout">Sign out</button>
+      </div>
+    </header>
+
+    <!-- Canvas -->
+    <main class="workspace-canvas">
+      <!-- Pending Approval Banner -->
+      <div id="pendingBanner" class="alert-banner warn hide">
+        <span>⚠️</span>
+        <div>
+          <strong>Account Pending Administrator Approval:</strong>
+          Your account request has been registered. Financial actions (transfers, withdrawals) will be enabled once approved.
+        </div>
+      </div>
+
+      <!-- Financial Overview Banner -->
+      <section class="overview-banner">
+        <div class="banner-content">
+          <div class="tag">✳ Your Financial Overview</div>
+          <h2>Good to see you, <em id="welcomeName">User</em></h2>
+          <p>Everything in its place. Here is your double-entry account ledger.</p>
+          <div class="banner-badges">
+            <span id="rolePill">Account holder</span>
+            <span>Private workspace</span>
+          </div>
+        </div>
+
+        <div class="banner-emblem">
+          <div class="inner">b</div>
+        </div>
+      </section>
+
+      <!-- Stats Grid -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="label">Total Balance</div>
+          <div class="value" id="totalBalDisplay">$0.00</div>
+          <div class="sub">Across all connected accounts</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Total Accounts</div>
+          <div class="value" id="totalAcctsCount">00</div>
+          <div class="sub">Active ledger accounts</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Security Status</div>
+          <div class="value" style="font-size:22px;color:#13795b" id="securityStatusDisplay">Verified Active</div>
+          <div class="sub">Idempotency & RBAC active</div>
+        </div>
+      </div>
+
+      <!-- Accounts Table Card -->
+      <section class="card-section" id="accountsSection">
+        <div class="section-header">
+          <h3>Your accounts</h3>
+          <div style="display:flex;gap:8px" id="newAcctWrap">
+            <input id="cur" value="USD" maxlength="3" style="width:70px;padding:6px 10px;border-radius:6px;border:1px solid #c9d8c6;font-size:13px">
+            <button id="mkAcct" class="btn-table" style="background:#134333;color:#fff;border:0">+ Open Account</button>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr><th>Account ID</th><th>Currency</th><th>Balance</th><th>Actions</th></tr>
+          </thead>
+          <tbody id="accts"></tbody>
+        </table>
+      </section>
+
+      <!-- Quick Actions Grid -->
+      <section class="card-section" id="actionsSection">
+        <div class="section-header">
+          <h3>Quick actions</h3>
+          <span style="font-size:12px;color:var(--text-muted)">Protected by unique Idempotency Keys</span>
+        </div>
+
+        <div class="actions-grid">
+          <!-- Transfer -->
+          <div class="action-box">
+            <h4>⇄ Transfer</h4>
+            <div class="form-row">
+              <select id="transferFrom"></select>
+              <input id="transferTo" placeholder="Destination Account ID">
+              <input id="transferAmt" placeholder="Amount (e.g. 25.00)">
+            </div>
+            <button id="btnTransfer">Send Transfer</button>
+          </div>
+
+          <!-- Withdraw -->
+          <div class="action-box">
+            <h4>↓ Withdraw</h4>
+            <div class="form-row">
+              <select id="withdrawFrom"></select>
+              <input id="withdrawAmt" placeholder="Amount (e.g. 10.00)">
+            </div>
+            <button id="btnWithdraw">Withdraw Funds</button>
+          </div>
+
+          <!-- Admin Deposit -->
+          <div class="action-box" id="depositBox">
+            <h4>↑ Deposit (Admin Only)</h4>
+            <div class="form-row">
+              <input id="depositTo" placeholder="Destination Account ID">
+              <input id="depositAmt" placeholder="Amount (e.g. 100.00)">
+            </div>
+            <button id="btnDeposit">Fund Account</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Statements Section -->
+      <section class="card-section" id="statementSection">
+        <div class="section-header">
+          <h3>Statement: <span id="stFor" style="color:var(--text-muted)">Select an account</span></h3>
+        </div>
+        <table>
+          <thead>
+            <tr><th>#</th><th>Kind</th><th>Amount</th><th>Timestamp</th></tr>
+          </thead>
+          <tbody id="stmt"></tbody>
+        </table>
+      </section>
+
+      <!-- User Management Section (Admin Only) -->
+      <section class="card-section hide" id="userMgmtSection">
+        <div class="section-header">
+          <h3>User Management & Onboarding</h3>
+          <div style="display:flex;gap:8px">
+            <select id="userFilter" style="padding:6px 10px;border-radius:6px;border:1px solid #c9d8c6;font-size:13px">
+              <option value="">All users</option>
+              <option value="pending" selected>Pending approval</option>
+              <option value="active">Active</option>
+              <option value="disabled">Disabled</option>
+            </select>
+            <button id="loadUsers" class="btn-table">Refresh</button>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr><th>User ID</th><th>Name</th><th>Role</th><th>Status</th><th>Origin</th><th>Actions</th></tr>
+          </thead>
+          <tbody id="userList"></tbody>
+        </table>
+      </section>
+
+      <!-- Oversight & Audit Section (Admin/Auditor) -->
+      <section class="card-section hide" id="oversightSection">
+        <div class="section-header">
+          <h3>Oversight & Reconciliation</h3>
+          <div style="display:flex;gap:8px">
+            <button id="rec" class="btn-table" style="background:#13795b;color:#fff;border:0">Reconcile Books</button>
+            <button id="aud" class="btn-table">Load Audit Log</button>
+            <button id="mkAud" class="btn-table hide">Create Auditor</button>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr><th>#</th><th>Action</th><th>Outcome</th><th>User ID</th></tr>
+          </thead>
+          <tbody id="audit"></tbody>
+        </table>
+      </section>
+
+      <!-- System Response Terminal -->
+      <section class="card-section" style="background:#09241b;color:#e8f4ec">
+        <div class="section-header">
+          <h3 style="color:#d5ebde;font-size:16px">Terminal Response</h3>
+          <button id="again" class="btn-table hide" style="background:#184a39;color:#fff;border:0">Resend Last Request</button>
+        </div>
+        <pre id="out">Ready.</pre>
+      </section>
+    </main>
   </div>
-  <section class="card" id="acctsCard"><h2>Accounts</h2>
-   <table><thead><tr><th>Account ID</th><th>Balance</th><th></th></tr></thead><tbody id="accts"></tbody></table>
-   <div class="row" id="newAcct" style="margin-top:10px"><input id="cur" value="USD" maxlength="3" style="max-width:90px"><button id="mkAcct" class="sec">Open account</button></div>
-  </section>
-  <section class="card" id="moveCard"><h2>Move money</h2>
-   <div class="row">
-    <select id="kind"><option value="transfers">Transfer</option><option value="withdrawals">Withdraw</option><option value="deposits" id="optDep">Deposit (admin)</option></select>
-    <select id="from"></select>
-    <input id="to" placeholder="Destination account ID">
-    <input id="amt" placeholder="Amount e.g. 12.50" style="max-width:150px">
-    <button id="go">Send</button><button id="again" class="sec hide">Resend same request</button>
-   </div>
-   <p class="mut">Every request gets a unique idempotency key. “Resend” repeats the identical request, so it is never paid twice.</p>
-  </section>
-  <section class="card" id="stmtCard"><h2>Statement <span id="stFor" class="mut"></span></h2>
-   <table><thead><tr><th>#</th><th>Type</th><th>Amount</th><th>Time</th></tr></thead><tbody id="stmt"></tbody></table>
-  </section>
-  <section class="card hide" id="userMgmt"><h2>User Management & Onboarding</h2>
-   <div class="row">
-    <select id="userFilter">
-     <option value="">All users</option>
-     <option value="pending" selected>Pending approval</option>
-     <option value="active">Active</option>
-     <option value="disabled">Disabled</option>
-    </select>
-    <button id="loadUsers" class="sec">Refresh user list</button>
-   </div>
-   <table style="margin-top:10px"><thead><tr><th>User ID</th><th>Name</th><th>Role</th><th>Status</th><th>Origin</th><th>Actions</th></tr></thead><tbody id="userList"></tbody></table>
-  </section>
-  <section class="card hide" id="oversight"><h2>Oversight & Audit</h2>
-   <div class="row"><button id="rec">Reconcile books</button><button id="aud" class="sec">Load audit log</button><button id="mkAud" class="sec hide">Create auditor</button></div>
-   <table style="margin-top:10px"><thead><tr><th>#</th><th>Action</th><th>Outcome</th><th>User</th></tr></thead><tbody id="audit"></tbody></table>
-  </section>
-  <section class="card"><h2>Last response</h2><pre id="out">Nothing yet.</pre></section>
- </div>
-</main>
+</div>
+
 <script>
 "use strict";
 const $ = id => document.getElementById(id);
 let token = sessionStorage.getItem("ll_token"), role = null, status = null, currentUserId = null, last = null, accounts = [];
+
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now() + "-" + Math.random().toString(16).slice(2));
 const money = (n, cur) => (n < 0 ? "-" : "") + (Math.abs(n) / 100).toFixed(2) + (cur ? " " + cur : "");
 const cell = (tr, text) => { const td = document.createElement("td"); td.textContent = String(text ?? ""); tr.appendChild(td); return td; };
@@ -96,137 +599,279 @@ async function api(method, path, body, key) {
   let data = {}; try { data = await r.json(); } catch (e) {}
   return {status: r.status, data};
 }
+
 function show(res) {
-  const o = $("out"); o.textContent = res.status + "\n" + JSON.stringify(res.data, null, 2);
+  const o = $("out");
+  o.textContent = res.status + "\n" + JSON.stringify(res.data, null, 2);
   o.className = res.status < 300 ? "ok" : "err";
 }
+
 function parseAmount(s) {
-  const m = /^(\d{1,10})(?:\.(\d{1,2}))?$/.exec(s.trim());
+  const m = /^(\d{1,10})(?:\.(\d{1,2}))?$/.exec((s || "").trim());
   return m ? parseInt(m[1], 10) * 100 + parseInt((m[2] || "0").padEnd(2, "0"), 10) : null;
 }
+
 async function login() {
   const r = await api("GET", "/me");
-  if (r.status !== 200) { token = null; sessionStorage.removeItem("ll_token"); show(r); return; }
+  if (r.status !== 200) {
+    token = null;
+    sessionStorage.removeItem("ll_token");
+    $("loginOut").textContent = r.status + ": " + JSON.stringify(r.data);
+    $("loginOut").classList.remove("hide");
+    return;
+  }
   currentUserId = r.data.user_id;
   role = r.data.role;
   status = r.data.status || "active";
-  const nameLabel = r.data.display_name ? ` (${r.data.display_name})` : "";
-  const b = $("badge");
-  b.textContent = `${role} • ${status}${nameLabel}`;
-  b.className = "badge " + (status === "pending" ? "pending" : status === "disabled" ? "disabled" : "");
-  b.classList.remove("hide");
-  $("loginCard").classList.add("hide");
-  $("app").classList.remove("hide");
-  $("logout").classList.remove("hide");
+  const name = r.data.display_name || (role === "admin" ? "Administrator" : "User");
+
+  $("userNameLabel").textContent = name;
+  $("welcomeName").textContent = name.split(" ")[0];
+  $("userRoleBadge").textContent = `${role} • ${status}`;
+  $("rolePill").textContent = `${role.toUpperCase()}`;
+  $("userAvatar").textContent = name[0].toUpperCase();
+
+  $("loginScreen").classList.add("hide");
+  $("dashboardScreen").classList.remove("hide");
 
   const isPending = status === "pending";
   $("pendingBanner").classList.toggle("hide", !isPending);
-  $("acctsCard").classList.toggle("hide", isPending);
-  $("moveCard").classList.toggle("hide", isPending || role === "auditor");
-  $("stmtCard").classList.toggle("hide", isPending);
+  $("accountsSection").classList.toggle("hide", isPending);
+  $("actionsSection").classList.toggle("hide", isPending || role === "auditor");
+  $("statementSection").classList.toggle("hide", isPending);
 
+  const isAdmin = role === "admin";
   const oversee = role !== "holder";
-  $("oversight").classList.toggle("hide", !oversee);
-  $("userMgmt").classList.toggle("hide", role !== "admin");
-  $("mkAud").classList.toggle("hide", role !== "admin");
-  $("optDep").disabled = role !== "admin";
-  $("newAcct").classList.toggle("hide", role === "auditor");
+  $("depositBox").classList.toggle("hide", !isAdmin);
+  $("userMgmtSection").classList.toggle("hide", !isAdmin);
+  $("navUserMgmt").classList.toggle("hide", !isAdmin);
+  $("oversightSection").classList.toggle("hide", !oversee);
+  $("navOversight").classList.toggle("hide", !oversee);
+  $("mkAud").classList.toggle("hide", !isAdmin);
 
   if (!isPending) {
     await refresh();
-    if (role === "admin") await loadUsers();
+    if (isAdmin) await loadUsers();
   }
 }
+
 async function refresh() {
-  const r = await api("GET", "/accounts"); if (r.status !== 200) return show(r);
-  accounts = r.data; const body = $("accts"); body.replaceChildren();
-  const from = $("from"); from.replaceChildren();
+  const r = await api("GET", "/accounts");
+  if (r.status !== 200) return show(r);
+  accounts = r.data;
+
+  $("totalAcctsCount").textContent = String(accounts.length).padStart(2, "0");
+  let totalMinor = 0;
+
+  const tbody = $("accts"); tbody.replaceChildren();
+  const trFrom = $("transferFrom"); trFrom.replaceChildren();
+  const wFrom = $("withdrawFrom"); wFrom.replaceChildren();
+
   for (const a of accounts) {
+    totalMinor += a.balance;
     const tr = document.createElement("tr");
-    cell(tr, a.account_id); cell(tr, money(a.balance, a.currency));
-    const btn = document.createElement("button"); btn.className = "sec"; btn.textContent = "Statement";
-    btn.onclick = () => statement(a.account_id); const td = document.createElement("td"); td.appendChild(btn); tr.appendChild(td);
-    body.appendChild(tr);
-    const o = document.createElement("option"); o.value = a.account_id; o.textContent = a.account_id.slice(0, 8) + "… (" + money(a.balance, a.currency) + ")"; from.appendChild(o);
+    cell(tr, a.account_id);
+    cell(tr, a.currency);
+    const balCell = cell(tr, money(a.balance, a.currency));
+    balCell.style.fontWeight = "bold";
+
+    const td = document.createElement("td");
+    const btn = document.createElement("button");
+    btn.className = "btn-table";
+    btn.textContent = "View Statement";
+    btn.onclick = () => statement(a.account_id);
+    td.appendChild(btn);
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+
+    const o1 = document.createElement("option");
+    o1.value = a.account_id;
+    o1.textContent = a.account_id.slice(0, 8) + "… (" + money(a.balance, a.currency) + ")";
+    trFrom.appendChild(o1);
+
+    const o2 = document.createElement("option");
+    o2.value = a.account_id;
+    o2.textContent = a.account_id.slice(0, 8) + "… (" + money(a.balance, a.currency) + ")";
+    wFrom.appendChild(o2);
+  }
+
+  $("totalBalDisplay").textContent = money(totalMinor, "USD");
+}
+
+async function statement(id) {
+  const r = await api("GET", "/accounts/" + id + "/entries");
+  if (r.status !== 200) return show(r);
+  $("stFor").textContent = id.slice(0, 8) + "…";
+  const b = $("stmt"); b.replaceChildren();
+  for (const e of r.data) {
+    const tr = document.createElement("tr");
+    cell(tr, e.id);
+    cell(tr, e.kind);
+    const amtCell = cell(tr, money(e.amount));
+    amtCell.style.color = e.amount < 0 ? "#b42318" : "#13795b";
+    amtCell.style.fontWeight = "bold";
+    cell(tr, new Date(e.created_at * 1000).toLocaleString());
+    b.appendChild(tr);
   }
 }
-async function statement(id) {
-  const r = await api("GET", "/accounts/" + id + "/entries"); if (r.status !== 200) return show(r);
-  $("stFor").textContent = id.slice(0, 8) + "…"; const b = $("stmt"); b.replaceChildren();
-  for (const e of r.data) { const tr = document.createElement("tr");
-    cell(tr, e.id); cell(tr, e.kind); cell(tr, money(e.amount)); cell(tr, new Date(e.created_at * 1000).toLocaleString()); b.appendChild(tr); }
-}
+
 async function send(req) {
-  const res = await api("POST", req.path, req.body, req.key); show(res);
-  $("again").classList.remove("hide"); await refresh();
+  const res = await api("POST", req.path, req.body, req.key);
+  show(res);
+  $("again").classList.remove("hide");
+  await refresh();
 }
+
 async function loadUsers() {
   const st = $("userFilter").value;
   const path = "/admin/users" + (st ? "?status=" + encodeURIComponent(st) : "");
   const r = await api("GET", path);
   if (r.status !== 200) return show(r);
   const body = $("userList"); body.replaceChildren();
+
   for (const u of r.data) {
     const tr = document.createElement("tr");
     cell(tr, u.user_id.slice(0, 8) + "…");
     cell(tr, u.display_name || "—");
     cell(tr, u.role);
-    cell(tr, u.status);
+    const stCell = cell(tr, u.status);
+    stCell.style.fontWeight = "bold";
+    if (u.status === "pending") stCell.style.color = "var(--warn)";
+    if (u.status === "disabled") stCell.style.color = "var(--err)";
     cell(tr, u.origin);
+
     const td = document.createElement("td");
     if (u.user_id !== currentUserId) {
       if (u.status === "pending") {
         const btn = document.createElement("button");
-        btn.className = "approve"; btn.textContent = "Approve";
-        btn.onclick = async () => { show(await api("POST", `/admin/users/${u.user_id}/status`, {status: "active"})); loadUsers(); };
+        btn.className = "btn-table approve";
+        btn.textContent = "Approve";
+        btn.onclick = async () => {
+          show(await api("POST", `/admin/users/${u.user_id}/status`, {status: "active"}));
+          loadUsers();
+        };
         td.appendChild(btn);
       } else if (u.status === "active") {
         const btn = document.createElement("button");
-        btn.className = "danger"; btn.textContent = "Disable";
-        btn.onclick = async () => { show(await api("POST", `/admin/users/${u.user_id}/status`, {status: "disabled"})); loadUsers(); };
+        btn.className = "btn-table danger";
+        btn.textContent = "Disable";
+        btn.onclick = async () => {
+          show(await api("POST", `/admin/users/${u.user_id}/status`, {status: "disabled"}));
+          loadUsers();
+        };
         td.appendChild(btn);
       } else if (u.status === "disabled") {
         const btn = document.createElement("button");
-        btn.className = "sec"; btn.textContent = "Re-enable";
-        btn.onclick = async () => { show(await api("POST", `/admin/users/${u.user_id}/status`, {status: "active"})); loadUsers(); };
+        btn.className = "btn-table";
+        btn.textContent = "Re-enable";
+        btn.onclick = async () => {
+          show(await api("POST", `/admin/users/${u.user_id}/status`, {status: "active"}));
+          loadUsers();
+        };
         td.appendChild(btn);
       }
     } else {
-      const span = document.createElement("span");
-      span.className = "mut"; span.textContent = "(You)";
-      td.appendChild(span);
+      const sp = document.createElement("span");
+      sp.textContent = "(You)";
+      sp.style.color = "var(--text-muted)";
+      td.appendChild(sp);
     }
     tr.appendChild(td);
     body.appendChild(tr);
   }
 }
-$("signin").onclick = () => { token = $("tok").value.trim(); sessionStorage.setItem("ll_token", token); login(); };
+
+// Event Listeners
+$("signin").onclick = () => {
+  token = $("tok").value.trim();
+  sessionStorage.setItem("ll_token", token);
+  login();
+};
+
 $("signup").onclick = async () => {
   const name = $("dispName").value.trim() || undefined;
-  const r = await api("POST", "/users", name ? {display_name: name} : undefined); show(r);
+  const r = await api("POST", "/users", name ? {display_name: name} : undefined);
+  show(r);
   if (r.status === 201) {
     $("tok").value = r.data.token;
-    $("out").textContent += "\n\nSAVE THIS TOKEN NOW. It is shown only once.\nStatus: " + r.data.status;
+    $("loginOut").textContent = "Token generated! Save this token now:\n" + r.data.token + "\nStatus: " + r.data.status;
+    $("loginOut").classList.remove("hide");
   }
 };
-$("logout").onclick = () => { sessionStorage.removeItem("ll_token"); location.reload(); };
-$("mkAcct").onclick = async () => { show(await api("POST", "/accounts", {currency: $("cur").value})); refresh(); };
-$("go").onclick = () => {
-  const amount = parseAmount($("amt").value); if (amount === null || amount <= 0) return show({status: 400, data: {error: "enter an amount like 12.50"}});
-  const kind = $("kind").value, from = $("from").value, to = $("to").value.trim();
-  const body = kind === "transfers" ? {from, to, amount} : kind === "deposits" ? {account_id: to || from, amount} : {account_id: from, amount};
-  last = {path: "/" + kind, body, key: uid()}; send(last);
+
+$("logout").onclick = () => {
+  sessionStorage.removeItem("ll_token");
+  location.reload();
 };
+
+$("mkAcct").onclick = async () => {
+  show(await api("POST", "/accounts", {currency: $("cur").value}));
+  refresh();
+};
+
+$("btnTransfer").onclick = () => {
+  const amt = parseAmount($("transferAmt").value);
+  if (!amt || amt <= 0) return show({status: 400, data: {error: "enter amount like 12.50"}});
+  last = {path: "/transfers", body: {from: $("transferFrom").value, to: $("transferTo").value.trim(), amount: amt}, key: uid()};
+  send(last);
+};
+
+$("btnWithdraw").onclick = () => {
+  const amt = parseAmount($("withdrawAmt").value);
+  if (!amt || amt <= 0) return show({status: 400, data: {error: "enter amount like 10.00"}});
+  last = {path: "/withdrawals", body: {account_id: $("withdrawFrom").value, amount: amt}, key: uid()};
+  send(last);
+};
+
+$("btnDeposit").onclick = () => {
+  const amt = parseAmount($("depositAmt").value);
+  if (!amt || amt <= 0) return show({status: 400, data: {error: "enter amount like 50.00"}});
+  last = {path: "/deposits", body: {account_id: $("depositTo").value.trim(), amount: amt}, key: uid()};
+  send(last);
+};
+
 $("again").onclick = () => last && send(last);
 $("rec").onclick = async () => show(await api("GET", "/reconcile"));
 $("aud").onclick = async () => {
-  const r = await api("GET", "/audit?limit=50"); if (r.status !== 200) return show(r);
+  const r = await api("GET", "/audit?limit=50");
+  if (r.status !== 200) return show(r);
   const b = $("audit"); b.replaceChildren();
-  for (const e of r.data) { const tr = document.createElement("tr"); cell(tr, e.id); cell(tr, e.action); cell(tr, e.outcome); cell(tr, (e.user_id || "").slice(0, 8)); b.appendChild(tr); }
+  for (const e of r.data) {
+    const tr = document.createElement("tr");
+    cell(tr, e.id);
+    cell(tr, e.action);
+    cell(tr, e.outcome);
+    cell(tr, (e.user_id || "").slice(0, 8));
+    b.appendChild(tr);
+  }
 };
-$("mkAud").onclick = async () => { const r = await api("POST", "/admin/users", {role: "auditor"}); show(r); if (r.status === 201) $("out").textContent += "\n\nGive this token to the auditor. It is shown only once."; };
+
+$("mkAud").onclick = async () => {
+  const r = await api("POST", "/admin/users", {role: "auditor"});
+  show(r);
+  if (r.status === 201) alert("Auditor Token:\n" + r.data.token);
+};
+
 $("loadUsers").onclick = () => loadUsers();
 $("userFilter").onchange = () => loadUsers();
+
+// Sidebar Navigation
+$("navOverview").onclick = () => {
+  window.scrollTo({top: 0, behavior: "smooth"});
+};
+$("navAccounts").onclick = () => {
+  $("accountsSection").scrollIntoView({behavior: "smooth"});
+};
+$("navStatements").onclick = () => {
+  $("statementSection").scrollIntoView({behavior: "smooth"});
+};
+$("navUserMgmt").onclick = () => {
+  $("userMgmtSection").scrollIntoView({behavior: "smooth"});
+};
+$("navOversight").onclick = () => {
+  $("oversightSection").scrollIntoView({behavior: "smooth"});
+};
+
 if (token) login();
 </script>
 </body>
